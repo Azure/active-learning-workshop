@@ -1,5 +1,4 @@
-
-# Strata 2018 Tutorial on Using R and Python for Scalable Data Science, Machine Learning, and AI
+# Active Learning Workshop - Scalable Featurization, Labelling and Experimentation Using R and Python
 
 ## Instructions
 
