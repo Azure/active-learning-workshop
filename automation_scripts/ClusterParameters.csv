@@ -1,0 +1,9 @@
+Parameter,Value
+SubscriptionID,MySubscriptionID
+ResourceGroup,stratadsvm
+Profilepath,AzureSubscriptionInfo.json
+ClusterStartIndex,1
+ClusterEndIndex,150
+ClusterPrefix,stratadsvm
+ClusterInfoOutputFileName,clusterOutFile.csv
+SshUsername,remoteuser

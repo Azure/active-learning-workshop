@@ -1,0 +1,23 @@
+{
+  "name": "cluster_docker_ali_mrclient",
+  "vmSize": "Standard_D3_v2", 
+  "maxTasksPerNode": 1,       
+  "poolSize": {
+    "dedicatedNodes": {
+      "min": 2,               
+      "max": 4
+    },
+    "lowPriorityNodes": {
+      "min": 0,
+      "max": 8                
+    },
+    "autoscaleFormula": "QUEUE"
+  },
+  "containerImage": "akzaidi/mrclient-docker",
+  "rPackages": {
+    "cran": [ ],
+    "github": [ ],
+    "bioconductor": []
+  },
+  "commandLine": []
+}

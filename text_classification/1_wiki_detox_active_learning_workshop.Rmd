@@ -1,0 +1,351 @@
+---
+title: "Active Learning for Text Classification"
+output: html_document
+params:
+  seed: 1                             # seed for random number generator
+  initial_examples_per_class: 20      # number of cases from the labeled dataset used to train the initial model
+  examples_to_label_per_iteration: 20 # number of cases to label and add to training set per iteration
+  num_iterations: 20                  # number of iterations of active learning
+  presample_size: 200                 # score and cluster only this many cases per iteration
+  monte_carlo_samples: 100            # times to repeat random sampling of training cases for estimating p-values
+---
+
+```{r setup, include=FALSE}
+.libPaths( c( "/data/mlserver/9.2.1/libraries/RServer", .libPaths()))
+library(RevoScaleR)
+library(MicrosoftML)
+
+knitr::opts_chunk$set(echo=TRUE, cache=FALSE, message=FALSE, warning=FALSE, fig.height=7.5)
+rxOptions(reportProgress=0)
+```
+
+# Classifying Wiki Detox Comments
+
+Here we use a simple active learning approach for building a text classifier.
+
+```{r load_libraries_and_data}
+### Libraries ###
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(pROC)
+# library(fastcluster)  # overwrites hclust
+
+source("active_learning_lib.R")
+
+FEATURIZED_DATA_FILE <- "featurized_wiki_comments_attack.Rds"
+RANDOM_TS_PERFORMANCE_FILE <- "passive_learning_curves_data.Rds"
+
+```
+
+```{r print_parameters}
+params
+```
+
+```{r initialize}
+set.seed(params$seed)
+
+FEATURIZED_DATA <- readRDS(FEATURIZED_DATA_FILE)
+FEATURIZED_DATA <- FEATURIZED_DATA[complete.cases(FEATURIZED_DATA),]
+
+in_labeled_set <- sample(c(TRUE, FALSE), nrow(FEATURIZED_DATA), prob=c(0.09, 0.91), replace=TRUE)
+
+labeled_data_df <- FEATURIZED_DATA[in_labeled_set,]
+unlabeled_data_df <- FEATURIZED_DATA[!in_labeled_set,]
+
+inputs <- grep("^V", names(labeled_data_df), value=TRUE)
+outcome <- "flagged"
+FORM <- formula(paste(outcome, paste(inputs, collapse="+"), sep="~"))
+
+```
+
+
+### Split labeled data into training and test sets
+
+```{r split_train_and_test_sets}
+
+initial_training_set <- labeled_data_df %>%
+  group_by(flagged) %>%
+  do(sample_n(., params$initial_examples_per_class)) %>%
+  ungroup %>%
+  as.data.frame
+
+test_set_ids <- setdiff(labeled_data_df$rev_id, initial_training_set$rev_id)
+TEST_SET <- labeled_data_df %>% filter(rev_id %in% test_set_ids)
+
+table(initial_training_set$flagged)
+
+table(TEST_SET$flagged)
+table(TEST_SET$flagged)/nrow(TEST_SET)
+```
+## Case selection function
+
+```{r select_cases}
+
+select_cases <- function(model, available_cases, N=params$examples_to_label_per_iteration, presample_size=params$presample_size){
+    presample_size <- min(nrow(available_cases), presample_size)
+    candidate_cases <- available_cases[sample(1:nrow(available_cases), presample_size),]
+    
+    predictions_df <- rxPredict(model, candidate_cases, extraVarsToWrite=c("rev_id", "flagged"))
+
+    predictions_df$entropy <- entropy(predictions_df$Probability)
+
+    predictions_df$cluster_id <- predictions_df %>%
+      dist(method="euclidean") %>%
+      hclust(method="ward.D2") %>%
+      cutree(k=N)
+    
+    selected <- predictions_df %>%
+      group_by(cluster_id) %>%
+      arrange(-entropy) %>%
+      slice(which.max(entropy)) %>%
+      as.data.frame
+   
+    return(selected)
+}   
+
+```
+
+## Initial model
+
+First we build a model on the small number of examples in the initial training set, and test on the test data.
+
+### Fit model to initial training set
+
+```{r train__initial_model}
+
+initial_model_results <- fit_and_evaluate_model(initial_training_set)
+initial_model_results$selected <- select_cases(initial_model_results$model, unlabeled_data_df)
+
+```
+
+### Results for initial model
+
+#### ROC curve
+
+```{r roc_curves}
+plot(initial_model_results$roc, print.auc=TRUE)
+
+```
+
+#### Confusion matrix
+
+```{r initial_model_confusion}
+
+initial_model_results$confusion
+
+```
+
+#### Performance summary
+
+```{r initial_model_performance}
+initial_model_results$performance
+
+```
+
+#### Histograms of class scores
+
+```{r class_score_histograms}
+
+plot_probability_distributions(initial_model_results, "initial model")
+
+```
+
+
+## Iterate modelling, case selection, and (pseudo) labelling
+
+```{r initial_model_results_selected}
+# These are the cases selected by the initial model for labelling: 
+# initial_model_results$selected
+```
+
+```{r iterate}
+
+new_sample <- initial_model_results$selected %>% get_new_pseudolabeled_sample
+
+current_training_set <- rbind(initial_training_set, new_sample[names(initial_training_set)])
+
+ALREADY_EVALUATED <- initial_model_results$selected$rev_id
+
+iteration_results <- lapply(1:params$num_iterations, function(i){
+  results <- fit_and_evaluate_model(current_training_set)
+  
+  candidate_cases <- unlabeled_data_df[(unlabeled_data_df$rev_id %in% setdiff(unlabeled_data_df$rev_id,
+                                                                                ALREADY_EVALUATED)),]
+  results$selected <- select_cases(results$model, candidate_cases)
+
+  ALREADY_EVALUATED <<- c(ALREADY_EVALUATED, results$selected$rev_id)
+
+  next_sample <- results$selected %>% get_new_pseudolabeled_sample
+  
+  current_training_set <<- rbind(current_training_set, next_sample[names(current_training_set)])
+
+  results
+})
+```
+
+Mean entropy of selected samples by iteration:
+
+```{r entropy_of_selected_samples}
+mean_entropy <- sapply(iteration_results, function(ires) mean(ires$selected$entropy))
+plot(mean_entropy, type='l', main="mean entropy of selected cases by iteration")
+
+```
+
+```{r iteration_results_selected}
+# These are the cases selected at each iteration, together with the scores produced by the model for that iteration.
+# lapply(iteration_results, function(ires) ires$selected)
+```
+
+This shows the change in the metrics, with each row showing an iteration. The 'negentropy' metric is the negative entropy across all three class probabilities.
+
+```{r visualize_metrics_by_iteration}
+iteration_performance <- do.call("rbind", lapply(iteration_results, function(ires) ires$performance))
+
+
+# iteration_performance <- bind_rows(lapply(iteration_results, function(ires) ires$performance))
+(performance_table <- rbind(initial_model_results$performance, iteration_performance))
+```
+
+### Comparing learning curves of active and passive learning
+
+```{r active_vs_passive_learning_curves}
+get_random_training_set_performance <- function(ts_sizes){
+  random_training_set <- initial_training_set
+
+  random_training_set_results <- lapply(c(0,diff(ts_sizes)), function(tss){
+    new_ids <- sample(setdiff(unlabeled_data_df$rev_id, random_training_set$rev_id), tss)
+    new_cases <- unlabeled_data_df %>% filter(rev_id %in% new_ids)
+    random_training_set <<- rbind(random_training_set, new_cases)
+    fit_and_evaluate_model(random_training_set)
+  })
+
+  random_ts_performance <- random_training_set_results %>%
+    lapply("[[", "performance") %>%
+    do.call(bind_rows, .)
+
+  random_ts_performance$sample_selection_mode <- "random"
+
+  random_ts_performance
+}
+
+performance_table <- as.data.frame(performance_table)
+ts_sizes <- performance_table$tss
+
+if (file.exists(RANDOM_TS_PERFORMANCE_FILE)){
+  random_ts_performance_list <- readRDS(RANDOM_TS_PERFORMANCE_FILE)
+} else {
+  NUM_TSS_COMPARISONS <- 3
+  random_ts_performance_list <- lapply(1:NUM_TSS_COMPARISONS, function(i){
+    rtsp <- get_random_training_set_performance(ts_sizes)
+    rtsp$group <- i
+    rtsp
+  })
+
+  saveRDS(random_ts_performance_list, RANDOM_TS_PERFORMANCE_FILE)
+}
+
+performance_table$sample_selection_mode <- "active"
+performance_table$group <- 0
+
+performance_data <- bind_rows(random_ts_performance_list, performance_table)
+names(performance_data)[6] <- "run"
+```
+```{r plot_learning_curves}
+performance_data %>% 
+  gather(key="metric", value="value", -tss, -sample_selection_mode, -run) %>% 
+  ggplot(aes(x=log10(tss), y=value, col=sample_selection_mode, group=run)) + 
+    geom_line(size=1, alpha=0.5) + 
+    facet_grid(metric ~ ., scales="free")
+
+```
+
+### Visualizing improvement for actively learned model
+
+
+```{r final_model}
+final_model_results <- iteration_results[[params$num_iterations]]
+```
+
+
+```{r visualize_change_in_prediction_entropy}
+plot_probability_distributions(final_model_results, "final model")
+
+```
+
+This series of ROC curves shows how performance changes with iterations of active learning.
+
+```{r visualizing_improvement, eval=TRUE}
+plot_roc_history(initial_model_results, iteration_results)
+
+```
+
+## Final model results
+### Confusion Matrix
+
+```{r final_model_confusion_matrix}
+final_model_results$confusion
+```
+
+### Performance summary
+
+Summary of performance using cases selected with active learning:
+
+```{r summary_of_preformance_using_selected_cases}
+
+(selected_sample_results <- final_model_results$performance)
+```
+
+
+## Monte Carlo Estimation of P-values
+
+What is the probability that a set of randomly chosen cases would improve the performance of the model as much as the selected cases did? We'll add the same number of examples to the training set, except that now they will be randomly chosen. We'll repeat this sampling, training, and evaluation process `r params$monte_carlo_samples` times, and see how many of those times we beat the performance of the selected cases.
+
+
+```{r bootstrap_probability}
+
+(N <- iteration_results[[params$num_iterations]]$performance[['tss']] - nrow(initial_training_set))
+
+available_cases <- unlabeled_data_df
+
+random_sample_results <- sapply(1:params$monte_carlo_samples, function(i){
+  new_sample <- available_cases[sample(1:nrow(available_cases), N, replace=FALSE),]
+
+  training_set_new <- rbind(initial_training_set, new_sample[names(initial_training_set)])
+
+  fit_and_evaluate_model(training_set_new)$performance
+})
+
+```
+
+### P-values
+
+This table shows the number of times out of `r params$monte_carlo_samples` tries that the randomly selected cases equalled or exceeded the performance of the actively learned cases for each metric. These numbers are estimated P-values in percent.
+
+```{r p_values}
+mapply ( 
+  function(metric) sum(random_sample_results[metric,] >= selected_sample_results[[metric]]), 
+  row.names(random_sample_results)
+) / params$monte_carlo_samples
+
+
+```
+
+## Model trained with all available "unlabeled" cases
+
+For comparison, we'll build a model as though we had gone through and labeled all `r nrow(available_cases)` of the usable new examples.
+
+```{r full_model_results}
+training_set_full <- rbind(initial_training_set, available_cases[names(initial_training_set)])
+
+full_model_results <- fit_and_evaluate_model(training_set_full)
+
+full_model_results$confusion
+
+full_model_results$performance
+
+plot_roc_history(initial_model_results, list(final_model_results, full_model_results))
+
+plot_probability_distributions(full_model_results, "full model")
+
+```

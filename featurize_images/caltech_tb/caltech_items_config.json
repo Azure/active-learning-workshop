@@ -1,0 +1,13 @@
+{
+  "embeddings": [
+    {
+      "tensorName": "Caltech 256 Items Embeddings",
+      "tensorShape": [
+        5000,
+        512
+      ],
+      "tensorPath": "https://raw.githubusercontent.com/Azure/Strata2018/master/featurize_images/caltech_tb/caltech_features.tsv",
+      "metadataPath": "https://raw.githubusercontent.com/Azure/Strata2018/master/featurize_images/caltech_tb/caltech_metadata.tsv"
+    }
+  ]
+}
