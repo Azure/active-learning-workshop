@@ -30,7 +30,7 @@ Accessed via R and Python APIs, pre-trained Deep Learning models and Transfer Le
 
 The tutorial materials and the scripts that are used to create the virtual machines configured as single-node Spark clusters are published in this GitHub repository, so you’ll be able to create environments identical to the ones you use in the tutorial by running the scripts  after the tutorial session completes.
 
-Outline:
+## Outline:
 
 1.	What limits the scalability of R and Python scripts?
 2.	What functions and techniques can be used to overcome those limits?
