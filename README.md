@@ -14,9 +14,9 @@ In the terminal, run these four commands:
 ```bash
 cd ~/notebooks
 
-git clone https://github.com/Azure/Strata2018
+git clone https://github.com/Azure/active-learning-workshop
 
-cd Strata2018
+cd active-learning-workshop
 
 source startup.sh
 ```
