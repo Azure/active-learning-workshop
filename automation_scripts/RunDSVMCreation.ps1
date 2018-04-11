@@ -13,7 +13,7 @@ $basepath = Get-Location
 #######################################################################
 #READ IN PARAMETER CSV CONFIGURATION FILE
 $currentPathTmp = Get-Location
-$currentPath = [string]$basepath + "\Configuration"
+$currentPath = [string]$basepath
 $paramFile = Import-Csv ClusterParameters.csv
 echo $paramFile
 # GET ALL THE PARAMETERS FROM THE CONFIGURATION PARAMETER FILE
@@ -54,8 +54,8 @@ for($i=$clusterstartindex; $i -le $clusterendindex; $i++) {
 	Set-Location -Path $currentPath
 	$clustername,$clusterpasswd,$dns -join ',' | out-file -filepath $clusterinfooutputfilename -append -Width 200;
 	
-	## SPECIFY ABSOLUTE PATH TO THE SCRIPT THAT YOU WANT TO SUBMIT AND RUN IN PARALLEL 
-	Start-Job -ScriptBlock {D:\git\kdd\SubmitDSVMCreation.ps1 $args[0] $args[1] $args[2] $args[3] $args[4]} -ArgumentList @($clustername, $resourcegroup, $profilepath, $clusterpasswd, $sshusername)
+	## SPECIFY ABSOLUTE OR RELATIVE PATH TO THE SCRIPT THAT YOU WANT TO SUBMIT AND RUN IN PARALLEL
+	Start-Job -FilePath SubmitDSVMCreation.ps1 -ArgumentList @($clustername, $resourcegroup, $profilepath, $clusterpasswd, $sshusername, $currentPath)
 }
 #######################################################################
 # END
