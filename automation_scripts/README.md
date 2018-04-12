@@ -5,10 +5,10 @@ The automation scripts in this directory can be used to provision many Data Scie
 ## Instructions
 
 1. Install Azure PowerShell - see https://docs.microsoft.com/en-us/powershell/azure/install-azurerm-ps 
-1.	Clone or download https://github.com/Azure/active-learning-workshop
-1.	Configure the provisioning by editing automation_scripts/ClusterParameters.csv, providing values for SubscriptionID, ResourceGroup, ClusterStartIndex, ClusterEndIndex, and ClusterPrefix
+1. Clone or download this repo: https://github.com/Azure/active-learning-workshop
+1. Configure the provisioning by editing active-learning-workshop/automation_scripts/ClusterParameters.csv, providing values for SubscriptionID, ResourceGroup, ClusterStartIndex, ClusterEndIndex, and ClusterPrefix
 1. Create a Resource Group with the name you entered in ClusterParameters.csv
-1.	In Azure PowerShell, run the provisioning script
+1. In Azure PowerShell, run the following commands:
 
 ```bash
 cd active-learning-workshop\automation_scripts

@@ -25,6 +25,8 @@ You can now log in to RStudio Server at http://hostname:8787 (unlike JupyterHub,
 
 In RStudio Server, navigate to ~/notebooks/active-learning-workshop/wood_knots/1_woodknots_active_learning_workshop.Rmd and click “Knit”
 
+To provision many Data Science Virtual Machines using automation, see the scripts and the README file in https://github.com/Azure/active-learning-workshop/blob/master/automation_scripts
+
 ## Abstract
 
 Accessed via R and Python APIs, pre-trained Deep Learning models and Transfer Learning are making custom Image Classification with large or small amounts of labeled data easily accessible to data scientists and application developers. This tutorial walks you through creating end-to-end data science solutions in R and Python on virtual machines, Spark environments, and cloud-based infrastructure and consuming them in production. This tutorial covers strategies and best practices for porting and interoperating between R and Python, with a novel Deep Learning use case for Image Classification as an example use case.
