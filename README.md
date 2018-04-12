@@ -23,6 +23,7 @@ source startup.sh
 
 You can now log in to RStudio Server at http://hostname:8787 (unlike JupyterHub, be sure to use http, not https).
 
+In RStudio Server, navigate to ~/notebooks/active-learning-workshop/wood_knots/1_woodknots_active_learning_workshop.Rmd and click “Knit”
 
 ## Abstract
 
