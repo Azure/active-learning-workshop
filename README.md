@@ -2,12 +2,12 @@
 
 ## Instructions
 
-Provision a CentOS Linux Data Science Virtual Machine; the size "Standard_DS12_v2" works well:
+1. Provision a CentOS Linux Data Science Virtual Machine; the size "Standard_DS12_v2" works well:
 https://azuremarketplace.microsoft.com/en-us/marketplace/apps/microsoft-ads.linux-data-science-vm?tab=Overview
 
-Log in to JupyterHub by pointing your web browser to https://hostname:8000 (be sure to use https, not http, and replace "hostname" with the hostname or IP address of your virtual machine). Please disgregard warnings about certificate errors.
+2. Log in to JupyterHub by pointing your web browser to https://hostname:8000 (be sure to use https, not http, and replace "hostname" with the hostname or IP address of your virtual machine). Please disgregard warnings about certificate errors.
 
-Open a bash terminal window in JupyterHub by clicking the New button and then clicking Terminal.
+3. Open a bash terminal window in JupyterHub by clicking the New button and then clicking Terminal.
 
 In the terminal, run these four commands:
 
@@ -21,9 +21,9 @@ cd active-learning-workshop
 source startup.sh
 ```
 
-You can now log in to RStudio Server at http://hostname:8787 (unlike JupyterHub, be sure to use http, not https).
+4. You can now log in to RStudio Server at http://hostname:8787 (unlike JupyterHub, be sure to use http, not https).
 
-In RStudio Server, navigate to ~/notebooks/active-learning-workshop/wood_knots/1_woodknots_active_learning_workshop.Rmd and click “Knit”
+5. In RStudio Server, navigate to ~/notebooks/active-learning-workshop/wood_knots/1_woodknots_active_learning_workshop.Rmd and click “Knit”
 
 To provision many Data Science Virtual Machines using automation, see the scripts and the README file in https://github.com/Azure/active-learning-workshop/blob/master/automation_scripts
 
