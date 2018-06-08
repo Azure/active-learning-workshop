@@ -1,64 +1,36 @@
 # cd /c/Users/rhorton/Documents/conferences/MLADS/MLADS_spring_2018
  
 import pandas as pd
-import numpy as np
-import re
+import numpy as np #
+import re #
 import random
-import gensim
+import gensim # 
 from gensim.models import KeyedVectors
 from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.metrics import confusion_matrix
 from sklearn.externals import joblib
 
-
-class GensimPreprocessor(BaseEstimator, TransformerMixin):
-    def __init__(self, newline_token='NEWLINE_TOKEN'):
-        self.newline_pat = re.compile(newline_token)
-    
-    def fit(self, X, y=None):
-        return self
-    
-    def inverse_transform(self, X):
-        return [" ".join(doc) for doc in X]
-    
-    def transform(self, X):
-        return [ list(self.tokenize(txt)) for txt in X ]
-    
-    def tokenize(self, doc):
-        doc = self.newline_pat.sub(' ', doc)
-        return gensim.utils.simple_preprocess(doc)
-
-
-class AvgWordVectorFeaturizer(object):
-    def __init__(self, embedding):
-        self.embedding = embedding
-    
-    def fit(self, X, y):
-        return self
-    
-    def transform(self, X):
-        # X is a list of tokenized documents
-        return np.array([
-            np.mean([self.embedding[t] for t in token_vec if t in self.embedding]
-                    or [np.zeros(self.embedding.vector_size)], axis=0)
-            for token_vec in X
-        ])
+from pipeline_parts import *
 
 ###
 
 def create_small_w2v_file():
+    # Location of source file on Tomas' computer
     glove_file = 'E:/Projects/MLADS18S/glove.6B.50d.txt'
-    # convert glove file to w2v format using gensim.scripts.glove2word2vec
+
+    # create this file in current wd
     w2v_file = './glove_6B_50d_w2v.txt' 
+    
+    # convert glove file to w2v format using gensim.scripts.glove2word2vec
     from gensim.scripts.glove2word2vec import glove2word2vec
     glove2word2vec(glove_file, w2v_file)
 
 def create_train_test_split():
     
-    training_set_file = "training_set_01.csv"
-    text_data_file = "attack_data.csv"
+    # Location of source file on Tomas' computer
+    text_data_file = "E:/Projects/MLADS18S/attack_data.csv"
+    training_set_file = "E:/Projects/MLADS18S/training_set_01.csv"
 
     word_vectors = KeyedVectors.load_word2vec_format(w2v_file, binary=False)
 
@@ -94,6 +66,10 @@ def train():
     
     joblib.dump(fitted_model, 'rf_attack_classifier_pipeline.pkl') 
 
+##############################
+## scoring script business
+
+global reloaded_model = None
 
 def init():
     """
@@ -105,3 +81,7 @@ def init():
 
 def run():
     reloaded_model.predict(['You are scum.', 'I like your shoes.', 'You are pxzx.'])
+
+def main():
+    create_small_w2v_file()
+    training_data, test_data = create_train_test_split()
