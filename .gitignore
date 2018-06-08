@@ -23,3 +23,5 @@
 *.utf8.md
 *.knit.md
 .Rproj.user
+/deployment/glove_6B_50d_w2v.txt
+/.vs
