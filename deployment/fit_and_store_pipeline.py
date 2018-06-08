@@ -1,50 +1,17 @@
 # cd /c/Users/rhorton/Documents/conferences/MLADS/MLADS_spring_2018
  
 import pandas as pd
-import numpy as np
-import re
+import numpy as np #
+import re #
 import random
-import gensim
+import gensim # 
 from gensim.models import KeyedVectors
 from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.metrics import confusion_matrix
 from sklearn.externals import joblib
 
-
-class GensimPreprocessor(BaseEstimator, TransformerMixin):
-    def __init__(self, newline_token='NEWLINE_TOKEN'):
-        self.newline_pat = re.compile(newline_token)
-    
-    def fit(self, X, y=None):
-        return self
-    
-    def inverse_transform(self, X):
-        return [" ".join(doc) for doc in X]
-    
-    def transform(self, X):
-        return [ list(self.tokenize(txt)) for txt in X ]
-    
-    def tokenize(self, doc):
-        doc = self.newline_pat.sub(' ', doc)
-        return gensim.utils.simple_preprocess(doc)
-
-
-class AvgWordVectorFeaturizer(object):
-    def __init__(self, embedding):
-        self.embedding = embedding
-    
-    def fit(self, X, y):
-        return self
-    
-    def transform(self, X):
-        # X is a list of tokenized documents
-        return np.array([
-            np.mean([self.embedding[t] for t in token_vec if t in self.embedding]
-                    or [np.zeros(self.embedding.vector_size)], axis=0)
-            for token_vec in X
-        ])
+from pipeline_parts import *
 
 ###
 
@@ -84,6 +51,3 @@ joblib.dump(fitted_model, 'rf_attack_classifier_pipeline.pkl')
 
 
 ###
-
-reloaded_model = joblib.load('rf_attack_classifier_pipeline.pkl')
-reloaded_model.predict(['You are scum.', 'I like your shoes.', 'You are pxzx.'])
