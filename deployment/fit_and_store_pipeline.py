@@ -28,11 +28,10 @@ def create_small_w2v_file():
 
 def create_train_test_split():
     
-    # Location of source file on Tomas' computer
+    # Location of original file of "attacks" on Tomas' computer
     text_data_file = "E:/Projects/MLADS18S/attack_data.csv"
+    # this is the pre-featurized subset of the attacks
     training_set_file = "E:/Projects/MLADS18S/training_set_01.csv"
-
-    word_vectors = KeyedVectors.load_word2vec_format(w2v_file, binary=False)
 
     text_data = pd.read_csv(text_data_file, encoding='windows-1252')
     text_data = text_data.set_index("rev_id")
@@ -47,11 +46,12 @@ def create_train_test_split():
     test_data = text_data.loc[test_set_rev_ids]
     return training_data, test_data
 
-def train():
+def train(training_data, w2v_file = './glove_6B_50d_w2v.txt'):
     """
     Creates a pickled trained model.
     """
 
+    word_vectors = KeyedVectors.load_word2vec_format(w2v_file, binary=False)
     model_pipeline = Pipeline([
         ('preprocessor', GensimPreprocessor()),
         ('vectorizer', AvgWordVectorFeaturizer(embedding=word_vectors)),
@@ -59,29 +59,40 @@ def train():
     ])
 
     fitted_model = model_pipeline.fit(training_data.comment, [int(x) for x in training_data.is_attack])
+    joblib.dump(fitted_model, 'rf_attack_classifier_pipeline.pkl') 
     return fitted_model
 
+def evaluate(fitted_model, test_data):
     pred = fitted_model.predict(test_data.comment)
-    confusion_matrix([int(x) for x in test_data.is_attack], pred)
-    
-    joblib.dump(fitted_model, 'rf_attack_classifier_pipeline.pkl') 
+    return confusion_matrix([int(x) for x in test_data.is_attack], pred)
 
 ##############################
 ## scoring script business
 
-global reloaded_model = None
+global reloaded_model
 
 def init():
     """
     Init function of the scoring script
-    """"
-
+    """
     reloaded_model = joblib.load('rf_attack_classifier_pipeline.pkl')
 
+def run(phrase_list):
+    return reloaded_model.predict(phrase_list)
 
-def run():
-    reloaded_model.predict(['You are scum.', 'I like your shoes.', 'You are pxzx.'])
+##############################
 
-def main():
+def script_main():
     create_small_w2v_file()
     training_data, test_data = create_train_test_split()
+    fitted_model = train(training_data)
+    print(evaluate(fitted_model, test_data))
+    
+    ### score script
+    init()
+    p = run(['You are scum.', 'I like your shoes.', 'You are pxzx.', 
+             'Your mother was a hamster and your father smelt of elderberries',
+             'One bag of hagfish slime, please'])
+    print(p)
+
+
