@@ -30,8 +30,9 @@ class GensimPreprocessor(BaseEstimator, TransformerMixin):
 
 
 class AvgWordVectorFeaturizer(object):
-    def __init__(self, embedding):
+    def __init__(self, embedding, alpha=0):
         self.embedding = embedding
+        self.alpha = alpha
     
     def fit(self, X, y):
         return self
@@ -39,7 +40,7 @@ class AvgWordVectorFeaturizer(object):
     def transform(self, X):
         # X is a list of tokenized documents
         return np.array([
-            np.mean([self.embedding[t] for t in token_vec if t in self.embedding]
+            np.mean([self.embedding[t] for t in token_vec if t in self.embedding and np.max(self.embedding[t]) > self.alpha]
                     or [np.zeros(self.embedding.vector_size)], axis=0)
             for token_vec in X
         ])
