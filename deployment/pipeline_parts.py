@@ -1,13 +1,8 @@
 import pandas as pd #
 import numpy as np
 import re
-# import random #
 import gensim
-# from gensim.models import KeyedVectors #
 from sklearn.pipeline import Pipeline
-# from sklearn.ensemble import RandomForestClassifier #
-# from sklearn.metrics import confusion_matrix #
-# from sklearn.externals import joblib #
 
 from sklearn.base import BaseEstimator, TransformerMixin
 
@@ -30,8 +25,10 @@ class GensimPreprocessor(BaseEstimator, TransformerMixin):
 
 
 class AvgWordVectorFeaturizer(object):
-    def __init__(self, embedding, alpha=0):
+    def __init__(self, embedding, alpha=0, restrict_vocab=400000):
         self.embedding = embedding
+        self.word2index = { w:i for i,w in enumerate(embedding.index2word) }
+        self.restrict_vocab = restrict_vocab
         self.alpha = alpha
     
     def fit(self, X, y):
@@ -40,7 +37,11 @@ class AvgWordVectorFeaturizer(object):
     def transform(self, X):
         # X is a list of tokenized documents
         return np.array([
-            np.mean([self.embedding[t] for t in token_vec if t in self.embedding and np.max(self.embedding[t]) > self.alpha]
+            np.mean([self.embedding[t] for t in token_vec 
+                        if t in self.embedding and 
+                        (self.word2index[t] < self.restrict_vocab) and
+                        (np.max(np.absolute(self.embedding[t])) > self.alpha)
+                    ]
                     or [np.zeros(self.embedding.vector_size)], axis=0)
             for token_vec in X
         ])
