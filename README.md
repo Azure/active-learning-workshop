@@ -11,7 +11,7 @@ https://azuremarketplace.microsoft.com/en-us/marketplace/apps/microsoft-ads.wind
 
 3. In git bash, run this command:  cd ~/notebooks; git clone https://github.com/Azure/active-learning-workshop.git
 
-4. Launch RStudio and open C:\Users\<username>\notebooks\active-learning-workshop\text_classification\1_wiki_detox_active_learning_workshop.Rmd and click “Knit”.
+4. Launch RStudio and open C:\Users\\\<username>\notebooks\active-learning-workshop\text_classification\1_wiki_detox_active_learning_workshop.Rmd and click “Knit”.
 
 To provision many Data Science Virtual Machines using automation, see the scripts and the README file in https://github.com/Azure/active-learning-workshop/blob/master/automation_scripts
 
