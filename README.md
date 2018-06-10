@@ -2,46 +2,36 @@
 
 ## Instructions
 
-1. Provision a CentOS Linux Data Science Virtual Machine; the size "Standard_DS12_v2" works well:
-https://azuremarketplace.microsoft.com/en-us/marketplace/apps/microsoft-ads.linux-data-science-vm?tab=Overview
+1. Provision a Windows Server 2016 Data Science Virtual Machine; the size "Standard_DS12_v2" works well:
+https://azuremarketplace.microsoft.com/en-us/marketplace/apps/microsoft-ads.windows-data-science-vm?tab=Overview
+- To connect to the Data Science Virtual Machine, use Microsoft Remote Desktop from the Microsoft Store
+- If you cannot connect, update both sets of inbound port rules to open port 3389
 
-2. Log in to JupyterHub by pointing your web browser to https://hostname:8000 (be sure to use https, not http, and replace "hostname" with the hostname or IP address of your virtual machine). Please disgregard warnings about certificate errors.
+2. Launch “git bash” on the Data Science Virtual Machine
 
-3. Open a bash terminal window in JupyterHub by clicking the New button and then clicking Terminal.
+3. In git bash, run this command: git clone https://github.com/Azure/active-learning-workshop.git
 
-In the terminal, run these four commands:
-
-```bash
-cd ~/notebooks
-
-git clone https://github.com/Azure/active-learning-workshop
-
-cd active-learning-workshop
-
-source startup.sh
-```
-
-4. You can now log in to RStudio Server at http://hostname:8787 (unlike JupyterHub, be sure to use http, not https).
-
-5. In RStudio Server, navigate to ~/notebooks/active-learning-workshop/wood_knots/1_woodknots_active_learning_workshop.Rmd and click “Knit”
+4. Open 1_wiki_detox_active_learning_workshop.Rmd in RStudio and click “Knit”.
 
 To provision many Data Science Virtual Machines using automation, see the scripts and the README file in https://github.com/Azure/active-learning-workshop/blob/master/automation_scripts
 
 ## Abstract
 
-Accessed via R and Python APIs, pre-trained Deep Learning models and Transfer Learning are making custom Image Classification with large or small amounts of labeled data easily accessible to data scientists and application developers. This tutorial walks you through creating end-to-end data science solutions in R and Python on virtual machines, Spark environments, and cloud-based infrastructure and consuming them in production. This tutorial covers strategies and best practices for porting and interoperating between R and Python, with a novel Deep Learning use case for Image Classification as an example use case.
+Accessed via R and Python APIs, pre-trained Deep Learning models and Transfer Learning are making custom classification with large or small amounts of labeled data easily accessible to data scientists and application developers. This tutorial walks you through creating end-to-end data science solutions in R and Python on cloud-based infrastructure and consuming them in production.
 
-The tutorial materials and the scripts that are used to create the virtual machines configured as single-node Spark clusters are published in this GitHub repository, so you’ll be able to create environments identical to the ones you use in the tutorial by running the scripts  after the tutorial session completes.
+## Active Learning
+
+[Active learning](https://en.wikipedia.org/wiki/Active_learning) helps us address the common situation where we have large amounts of data, but labeling this data is expensive. By using a preliminary model to select the cases that are likely to be most useful for improving the model, and iterating through several cycles of model training and case selection, we can often build a model using a much smaller training set (thus requiring less labeling effort) than we would otherwise need. Companies like [Figure Eight (formerly CrowdFlower)](https://www.figure-eight.com/) and services like the [Azure Custom Vision service](https://azure.microsoft.com/en-us/services/cognitive-services/custom-vision-service/) make use of active learning.
 
 ## Outline:
 
-1.	What limits the scalability of R and Python scripts?
-2.	What functions and techniques can be used to overcome those limits?
-3.	Hands-on, end-to-end Deep Learning-based Image Classification example in R and Python using functions that scale from single nodes to distributed computing clusters
-    1.	Data exploration and wrangling
-    2.	Featurization and Modeling
-    3.	Deployment and Consumption
-    4.	Scaling with distributed computing
+1.	Data exploration
+2.	Featurization using word embeddings
+3.	Active learning from selected cases
+4.  Other featurization approaches
+5.  Classification
+6.  ROC Curves and Utility Maximization
+7.  Deployment and consumption of scoring services with Azure Machine Learning
 
 ## Contributing
 
