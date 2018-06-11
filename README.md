@@ -31,7 +31,7 @@ Accessed via R and Python APIs, pre-trained Deep Learning models and Transfer Le
 4.  Other featurization approaches
 5.  Classification
 6.  ROC Curves and Utility Maximization
-7.  Hyperparameter Tuning using Azure Machine Learning and Azure Batch AI
+7.  Hyperparameter Tuning using Azure Machine Learning and Azure Batch AI - https://marinch.visualstudio.com/_git/mlads2018spring (Microsoft FTEs only)
 7.  Deployment and consumption of scoring services with Azure Machine Learning
 
 ## Contributing
