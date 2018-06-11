@@ -30,7 +30,7 @@ def create_train_test_split():
     
     # Location of original file of "attacks" on Tomas' computer
     text_data_file = "E:/Projects/MLADS18S/attack_data.csv"
-    # this is the pre-featurized subset of the attacks
+    # this is the pre-featurized subset of the potential attacks
     training_set_file = "E:/Projects/MLADS18S/training_set_01.csv"
 
     text_data = pd.read_csv(text_data_file, encoding='windows-1252')
