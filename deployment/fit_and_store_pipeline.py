@@ -77,20 +77,33 @@ def evaluate(fitted_model, test_data):
 ##############################
 ## scoring script business
 
-global reloaded_model
-
 def init():
+    global reloaded_model
     """
     Init function of the scoring script
     """
     reloaded_model = joblib.load('rf_attack_classifier_pipeline.pkl')
 
-def run(phrase_list):
-    return reloaded_model.predict(phrase_list)
+def run(raw_data):
+
+    import json
+
+    try:
+        phrase_list = json.loads(raw_data)['data']
+        result = reloaded_model.predict(phrase_list)
+    except Exception as e:
+        result = str(e)
+    return json.dumps({"result": result.tolist()})
 
 ##############################
 
+test_attacks = ['You are scum.', 'I like your shoes.', 'You are pxzx.', 
+             'Your mother was a hamster and your father smelt of elderberries',
+             'One bag of hagfish slime, please']
+
 def script_main():
+
+    import json
 
     training_data, test_data = create_train_test_split()
     fitted_model = train(training_data)
@@ -98,9 +111,9 @@ def script_main():
     
     ### score script
     init()
-    p = run(['You are scum.', 'I like your shoes.', 'You are pxzx.', 
-             'Your mother was a hamster and your father smelt of elderberries',
-             'One bag of hagfish slime, please'])
+    encoded_data = bytes(json.dumps({"data": test_attacks}), encoding = 'utf8')
+
+    p = run(encoded_data)
     print(p)
 
 
