@@ -27,3 +27,7 @@
 /.vs
 /deployment/__pycache__
 /deployment/rf_attack_classifier_pipeline.pkl
+/deployment/attack_data.csv
+/deployment/.ipynb_checkpoints
+/deployment/text_data.zip
+/deployment/miniglove_6B_50d_w2v.txt

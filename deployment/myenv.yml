@@ -1,0 +1,11 @@
+name: myenv
+channels:
+  - defaults
+dependencies:
+  - pip:
+    - numpy
+    - scikit-learn
+    # Required packages for AzureML execution, history, and data preparation.
+    - --extra-index-url https://azuremlsdktestpypi.azureedge.net/sdk-release/Preview/E7501C02541B433786111FE8E140CAA1
+    - azureml-core
+    - gensim
