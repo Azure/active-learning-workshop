@@ -5,7 +5,7 @@
 1. Provision a Windows Server 2016 Data Science Virtual Machine; the size "Standard_DS12_v2" works well:
 https://azuremarketplace.microsoft.com/en-us/marketplace/apps/microsoft-ads.windows-data-science-vm?tab=Overview
 - To connect to the Data Science Virtual Machine, use Microsoft Remote Desktop from the Microsoft Store
-- If you cannot connect, update both sets of inbound port rules to open port 3389
+- If you cannot connect, update all sets of inbound port rules to include a rule to open port 3389
 
 2. Launch “git bash” on the Data Science Virtual Machine
 
