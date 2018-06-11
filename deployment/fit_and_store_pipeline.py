@@ -15,9 +15,11 @@ from pipeline_parts import *
 
 ###
 
+data_files_dir = 'E:/Projects/MLADS18S/'
+
 def create_small_w2v_file():
     # Location of source file on Tomas' computer
-    glove_file = 'E:/Projects/MLADS18S/glove.6B.50d.txt'
+    glove_file = data_files_dir + 'glove.6B.50d.txt'
 
     # create this file in current wd
     w2v_file = './glove_6B_50d_w2v.txt' 
@@ -26,12 +28,18 @@ def create_small_w2v_file():
     from gensim.scripts.glove2word2vec import glove2word2vec
     glove2word2vec(glove_file, w2v_file)
 
+def unzip_file_here(f):
+    import zipfile
+    zip_ref = zipfile.ZipFile(f, 'r')
+    zip_ref.extractall('.')
+    zip_ref.close()
+
 def create_train_test_split():
     
     # Location of original file of "attacks" on Tomas' computer
-    text_data_file = "E:/Projects/MLADS18S/attack_data.csv"
+    text_data_file = 'attack_data.csv'
     # this is the pre-featurized subset of the attacks
-    training_set_file = "E:/Projects/MLADS18S/training_set_01.csv"
+    training_set_file = 'training_set_01.csv'
 
     text_data = pd.read_csv(text_data_file, encoding='windows-1252')
     text_data = text_data.set_index("rev_id")
@@ -46,7 +54,7 @@ def create_train_test_split():
     test_data = text_data.loc[test_set_rev_ids]
     return training_data, test_data
 
-def train(training_data, w2v_file = './glove_6B_50d_w2v.txt'):
+def train(training_data, w2v_file = './miniglove_6B_50d_w2v.txt'):
     """
     Creates a pickled trained model.
     """
@@ -69,30 +77,43 @@ def evaluate(fitted_model, test_data):
 ##############################
 ## scoring script business
 
-global reloaded_model
-
 def init():
+    global reloaded_model
     """
     Init function of the scoring script
     """
     reloaded_model = joblib.load('rf_attack_classifier_pipeline.pkl')
 
-def run(phrase_list):
-    return reloaded_model.predict(phrase_list)
+def run(raw_data):
+
+    import json
+
+    try:
+        phrase_list = json.loads(raw_data)['data']
+        result = reloaded_model.predict(phrase_list)
+    except Exception as e:
+        result = str(e)
+    return json.dumps({"result": result.tolist()})
 
 ##############################
 
+test_attacks = ['You are scum.', 'I like your shoes.', 'You are pxzx.', 
+             'Your mother was a hamster and your father smelt of elderberries',
+             'One bag of hagfish slime, please']
+
 def script_main():
-    create_small_w2v_file()
+
+    import json
+
     training_data, test_data = create_train_test_split()
     fitted_model = train(training_data)
     print(evaluate(fitted_model, test_data))
     
     ### score script
     init()
-    p = run(['You are scum.', 'I like your shoes.', 'You are pxzx.', 
-             'Your mother was a hamster and your father smelt of elderberries',
-             'One bag of hagfish slime, please'])
+    encoded_data = bytes(json.dumps({"data": test_attacks}), encoding = 'utf8')
+
+    p = run(encoded_data)
     print(p)
 
 
