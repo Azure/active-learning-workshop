@@ -33,3 +33,4 @@
 /deployment/miniglove_6B_50d_w2v.txt
 /deployment/text_data
 /deployment/myenv.yml
+/deployment/score.py
