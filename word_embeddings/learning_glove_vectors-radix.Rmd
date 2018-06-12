@@ -1,0 +1,249 @@
+---
+title: "Learning Word Embeddings from Vector Space Models"
+description: |
+  This article describes how to learn word embeddings from vector space models.
+author:
+  - name: Ali Zaidi
+    url: https://github.com/akzaidi
+    affiliation: Microsoft AI and Research
+output: radix::radix_article
+---
+
+```{r global, include=FALSE}
+knitr::opts_chunk$set(fig.retina=2, echo = TRUE, warning = FALSE, cache = TRUE)
+```
+
+```{r ipsum_setup, message=FALSE, warning=FALSE, cache=FALSE, echo=FALSE}
+library(hrbrthemes)
+library(tidyverse)
+library(plotly)
+
+update_geom_font_defaults(font_rc)
+```
+
+Let's walk through an example of learning word embeddings from vector space models. We'll take a look at the GloVe model.
+
+## GloVe - Global Vectors
+
+```{r load_data}
+library(tidyverse)
+data_dir <- "~/tatk/resources/data/imdb/aclImdb/train"
+unlabeled_df <- tibble(file_name = list.files(file.path(data_dir, "unsup"),
+                                              full.names = TRUE))
+unlabeled_df <- unlabeled_df %>% 
+  mutate(review = map(file_name, ~read_lines(.x)))
+
+```
+
+### Preprocess Data
+
+We need to get the data pre-processed, which can mean a number of things:
+
+* case normalization
+* regex
+* punctuation / numeric removal
+* stop-word removal
+* phrase-detection
+* part-of-speech tagging
+* normalization: stemming / lemmatization
+* tokenization
+
+For now, we'll just case-normalization.
+
+```{r text2vec_normalization}
+library(text2vec)
+preprocessor_fn <- tolower
+tokenizer_fn <- word_tokenizer
+
+preprocessed_df <- unlabeled_df %>%
+  select(review) %>% 
+  mutate(preprocessed_review = preprocessor_fn(review), tokenized_review = tokenizer_fn(preprocessed_review))
+
+```
+
+
+### Distribution of Review Length
+
+```{r review_len, fig.show='hold'}
+
+preprocessed_df %>% 
+  mutate(count_tokens = map_int(tokenized_review, ~length(.x))) %>% 
+  ggplot(aes(x = count_tokens)) +
+  geom_histogram(binwidth = 1) + theme_ipsum_rc() +
+  labs(title = "distribution of review length")
+
+```
+
+### Create Vocabulary from Tokens
+
+```{r create_vocab}
+tokens <- itoken(preprocessed_df$tokenized_review, progressbar = TRUE)
+vocab <- create_vocabulary(tokens) %>% prune_vocabulary(term_count_min = 5L)
+vectorizer <- vocab_vectorizer(vocab)
+term_co_occur <- create_tcm(tokens, vectorizer, skip_grams_window=5L)
+
+```
+
+### Fit GloVe Model
+
+We have our term co-occurrence matrix, so now we just need to train our model.
+
+```{r train_glove}
+
+glove_model <- GlobalVectors$new(word_vectors_size = 200,
+                                 vocabulary = vocab,
+                                 x_max = 10)
+imdb_vectors <- glove_model$fit_transform(term_co_occur, n_iter = 10, convergence_tol = 0.01)
+imdb_vectors %>% dim
+```
+
+Note that model learns two sets of word vectors - main and context. Essentially they are the same since model is symmetric. From our experience learning two sets of word vectors leads to higher quality embeddings. GloVe model is “decomposition” model (inherits from mlapiDecomposition - generic class of models which decompose input matrix into two low-rank matrices). So on par with any other mlapiDecomposition model second low-rank matrix (context word vectors) is available in components field.
+
+Common practice to take the sum of the context embeddings and main embeddings:
+
+```{r merge_embeddings}
+
+imdb_embedding <- imdb_vectors + t(glove_model$components)
+
+```
+
+### Save and Visualize with TensorBoard
+
+```{r save_embeddings, eval=FALSE}
+
+imdb_embedding_df <- imdb_embedding %>% as.data.frame()
+
+write_delim(imdb_embedding_df, path = file.path(data_dir, "imdb_embeddings.tsv"), col_names = FALSE, delim = "\t")
+
+write_delim(as.data.frame(row.names(imdb_embedding_df)), path = file.path(data_dir, "imdb_embeddings_metadata.tsv"), col_names = FALSE, delim = "\t")
+
+```
+
+
+## Intrinsic Tests
+
+```{r analogy}
+
+analogy_test <- function(embeddings, vec1, vec2, vec3, 
+                         top_n = 5, method = "cosine", norm = "l2") {
+  
+  vec4 <-  embeddings[vec1, , drop = FALSE] - 
+  embeddings[vec2, , drop = FALSE] + 
+  embeddings[vec3, , drop = FALSE]
+  similarity <- sim2(x = embeddings, y = vec4,
+                     method = method, norm = norm)
+  head(sort(similarity[,1], decreasing = TRUE), top_n)
+  
+}
+
+analogy_test(imdb_embedding, "king", "man", "woman")
+analogy_test(imdb_embedding, "good", "great", "bad")
+analogy_test(imdb_embedding, "horror", "scary", "comedy")
+
+```
+
+## Extrinsic Evaluation
+
+Let's evaluate this on an extrinsic test: sentiment analysis. We'll use a labeled corpus of reviews:
+
+```{r load_labeled}
+
+read_directory <- function(directory, sub_directories,
+                           sample_perc = 0.1) {
+  
+  files <- map2(rep(directory, length(sub_directories)),
+                    sub_directories, file.path) %>% 
+    map(~list.files(.x, full.names = TRUE))
+  names(files) <- sub_directories
+  files <- bind_rows(files) %>% gather(key = "sentiment", value = "path")
+  
+  files %>% 
+    sample_frac(sample_perc) %>% 
+    mutate(review = map(path, ~read_lines(.x))) %>% unnest(review)
+
+}
+
+labeled_df <- read_directory(data_dir, c("pos", "neg"))
+
+```
+
+### Featurize reviews:
+
+```{r extrinsic_sentiment}
+
+featurize_reviews <- function(labeled_data,
+                              embedding = imdb_embedding,
+                              aggregation_fn = colSums) {
+  
+  lookup <- function(words) {
+    words <- words[words %in% row.names(embedding)]
+    embedding[words, , drop = FALSE]
+  }
+  
+  labeled_data <- labeled_data %>% 
+    mutate(sep_words = map(review, ~unlist(str_split(.x, " ")[[1]]))) %>% 
+    mutate(embedding_matrix = map(sep_words, ~lookup(unlist(.x))),
+           features = map(embedding_matrix, ~aggregation_fn(.x)))
+  
+  labeled_data %>% select(sentiment, features) %>% 
+    mutate(features = map(features, ~as_tibble(t(.x)))) %>% unnest(features)
+  
+  
+}
+
+labeled_df <- featurize_reviews(labeled_df)
+
+```
+
+### Learning Curves
+
+```{r test_classifier}
+library(pipelearner)
+
+
+learning_curves <- labeled_df %>% pipelearner() %>% 
+  learn_cvpairs(crossv_mc, n = 5, test = .15) %>% 
+  learn_curves(seq(.1, 1, by = .1)) %>% 
+  learn_models(rpart, sentiment ~ .) %>% 
+  learn()
+
+response_var <- function(model) {
+  formula(model)[[2L]]
+}
+
+response <- function(model, data) {
+  eval(response_var(model), as.data.frame(data))
+}
+
+calc_auc <- function(model, test_data) {
+  
+  library(pROC)
+  prediction <- predict(model, test_data)
+  actual    <- response(model, test_data)
+  roc_value <- roc(actual, prediction[,2])
+  auc(roc_value)
+}
+
+
+results <- learning_curves %>% 
+  mutate(
+    auc_train = map2_dbl(fit, train, calc_auc),
+    auc_test  = map2_dbl(fit, test,  calc_auc)
+  )
+
+
+results %>% 
+  select(train_p, contains("auc")) %>% 
+  gather(source, auc, contains("auc")) %>% 
+  ggplot(aes(train_p, auc, color = source)) +
+   geom_jitter(width = .03, alpha = .3) +
+   stat_summary(geom = "line", fun.y = mean) +
+   stat_summary(geom = "point", fun.y = mean, size = 4) +
+   labs(x = "Proportion of training data used",
+        y = "AUC", 
+        title = "Learning Curves for a Single Decision Tree") +
+  theme_ipsum_rc()
+
+
+
+```
