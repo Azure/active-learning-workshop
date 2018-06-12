@@ -1,10 +1,10 @@
 # cd /c/Users/rhorton/Documents/conferences/MLADS/MLADS_spring_2018
- 
+
+import numpy as np
 import pandas as pd
-import numpy as np #
-import re #
+import re
 import random
-import gensim # 
+import gensim 
 from gensim.models import KeyedVectors
 from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestClassifier
