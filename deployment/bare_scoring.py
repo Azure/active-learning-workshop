@@ -1,14 +1,16 @@
 def init():
-
-    from sklearn.externals import joblib
-    from azureml.assets.persistence.persistence import get_model_path
-
-    global reloaded_model
     """
     Init function of the scoring script
     """
-    model_path = get_model_path('rf_attack_classifier_pipeline.pkl')
-    reloaded_model = joblib.load(model_path)
+
+    from sklearn.externals import joblib
+
+    global reloaded_model
+
+    # from azureml.assets.persistence.persistence import get_model_path
+    # model_path = get_model_path('rf_attack_classifier_pipeline.pkl')
+    # reloaded_model = joblib.load(model_path)
+    reloaded_model = joblib.load('rf_attack_classifier.pkl')
 
 def run(raw_data):
 
