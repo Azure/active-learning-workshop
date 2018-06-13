@@ -4,19 +4,18 @@ output: html_document
 params:
   seed: 1                             # seed for random number generator
   initial_examples_per_class: 20      # number of cases from the labeled dataset used to train the initial model
-  examples_to_label_per_iteration: 20 # number of cases to label and add to training set per iteration
+  examples_to_label_per_iteration: 10 # number of cases to label and add to training set per iteration
   num_iterations: 20                  # number of iterations of active learning
-  presample_size: 200                 # score and cluster only this many cases per iteration
+  presample_size: 20000               # score and cluster only this many cases per iteration
   monte_carlo_samples: 100            # times to repeat random sampling of training cases for estimating p-values
+  mu: 0.5
+  sigma: 0.1
 ---
 
 ```{r setup, include=FALSE}
-.libPaths( c( "/data/mlserver/9.2.1/libraries/RServer", .libPaths()))
-library(RevoScaleR)
-library(MicrosoftML)
 
-knitr::opts_chunk$set(echo=TRUE, cache=FALSE, message=FALSE, warning=FALSE, fig.height=7.5)
-rxOptions(reportProgress=0)
+knitr::opts_chunk$set(echo=TRUE, cache=TRUE, message=FALSE, warning=FALSE, fig.height=7.5)
+
 ```
 
 # Classifying Wiki Detox Comments
@@ -29,31 +28,32 @@ library(dplyr)
 library(ggplot2)
 library(tidyr)
 library(pROC)
-# library(fastcluster)  # overwrites hclust
 
-source("active_learning_lib.R")
+source("active_learning_lib_random_forest.R")
 
 FEATURIZED_DATA_FILE <- "featurized_wiki_comments_attack.Rds"
 RANDOM_TS_PERFORMANCE_FILE <- "passive_learning_curves_data.Rds"
-
+TEST_SET_SIZE <- 10000
 ```
 
 ```{r print_parameters}
+
+# params <- list(seed=1, initial_examples_per_class=20, examples_to_label_per_iteration=20, num_iterations=20, presample_size=20000, monte_carlo_samples=10, mu=0.5, sigma=0.1)
 params
 ```
 
 ```{r initialize}
-set.seed(params$seed)
+set.seed(1)
 
 FEATURIZED_DATA <- readRDS(FEATURIZED_DATA_FILE)
 FEATURIZED_DATA <- FEATURIZED_DATA[complete.cases(FEATURIZED_DATA),]
 
-in_labeled_set <- sample(c(TRUE, FALSE), nrow(FEATURIZED_DATA), prob=c(0.09, 0.91), replace=TRUE)
+test_set_ids <- sample(FEATURIZED_DATA$rev_id, TEST_SET_SIZE)
+TEST_SET <- FEATURIZED_DATA %>% filter(rev_id %in% test_set_ids)
 
-labeled_data_df <- FEATURIZED_DATA[in_labeled_set,]
-unlabeled_data_df <- FEATURIZED_DATA[!in_labeled_set,]
+unlabeled_data_df <- FEATURIZED_DATA[!(FEATURIZED_DATA$rev_id %in% TEST_SET$rev_id),]
 
-inputs <- grep("^V", names(labeled_data_df), value=TRUE)
+inputs <- grep("^V", names(FEATURIZED_DATA), value=TRUE)
 outcome <- "flagged"
 FORM <- formula(paste(outcome, paste(inputs, collapse="+"), sep="~"))
 
@@ -63,15 +63,13 @@ FORM <- formula(paste(outcome, paste(inputs, collapse="+"), sep="~"))
 ### Split labeled data into training and test sets
 
 ```{r split_train_and_test_sets}
+set.seed(params$seed)
 
-initial_training_set <- labeled_data_df %>%
+initial_training_set <- FEATURIZED_DATA %>%
   group_by(flagged) %>%
   do(sample_n(., params$initial_examples_per_class)) %>%
   ungroup %>%
   as.data.frame
-
-test_set_ids <- setdiff(labeled_data_df$rev_id, initial_training_set$rev_id)
-TEST_SET <- labeled_data_df %>% filter(rev_id %in% test_set_ids)
 
 table(initial_training_set$flagged)
 
@@ -81,28 +79,32 @@ table(TEST_SET$flagged)/nrow(TEST_SET)
 ## Case selection function
 
 ```{r select_cases}
+get_uncertainty_function <- function(pred_df){
+  function(x){
+    dnorm(x, mean=params$mu, sd=params$sigma)
+  }
+}
 
-select_cases <- function(model, available_cases, N=params$examples_to_label_per_iteration, presample_size=params$presample_size){
+select_cases <- function(current_results, available_cases, N=params$examples_to_label_per_iteration, presample_size=params$presample_size){
+    model <- current_results$model
     presample_size <- min(nrow(available_cases), presample_size)
     candidate_cases <- available_cases[sample(1:nrow(available_cases), presample_size),]
     
-    predictions_df <- rxPredict(model, candidate_cases, extraVarsToWrite=c("rev_id", "flagged"))
+    votes_vec <- predict(model, candidate_cases, type='vote')[,'TRUE']
+    predictions_df <- data.frame(rev_id=candidate_cases$rev_id,
+                                  flagged=candidate_cases$flagged,
+                                  predicted=votes_vec > 0.5,
+                                  estimated_probability=votes_vec)
 
-    predictions_df$entropy <- entropy(predictions_df$Probability)
+    uncertainty <- get_uncertainty_function(current_results$test_predictions)
 
-    predictions_df$cluster_id <- predictions_df %>%
-      dist(method="euclidean") %>%
-      hclust(method="ward.D2") %>%
-      cutree(k=N)
-    
-    selected <- predictions_df %>%
-      group_by(cluster_id) %>%
-      arrange(-entropy) %>%
-      slice(which.max(entropy)) %>%
-      as.data.frame
-   
+    p <- predictions_df$estimated_probability
+    u <- uncertainty(p)
+    s <- sample(predictions_df$rev_id, N, prob=u, replace=FALSE)
+    selected <- predictions_df %>% filter(rev_id %in% s)
+
     return(selected)
-}   
+}
 
 ```
 
@@ -115,18 +117,11 @@ First we build a model on the small number of examples in the initial training s
 ```{r train__initial_model}
 
 initial_model_results <- fit_and_evaluate_model(initial_training_set)
-initial_model_results$selected <- select_cases(initial_model_results$model, unlabeled_data_df)
+initial_model_results$selected <- select_cases(initial_model_results, unlabeled_data_df)
 
 ```
 
 ### Results for initial model
-
-#### ROC curve
-
-```{r roc_curves}
-plot(initial_model_results$roc, print.auc=TRUE)
-
-```
 
 #### Confusion matrix
 
@@ -143,25 +138,12 @@ initial_model_results$performance
 
 ```
 
-#### Histograms of class scores
-
-```{r class_score_histograms}
-
-plot_probability_distributions(initial_model_results, "initial model")
-
-```
-
 
 ## Iterate modelling, case selection, and (pseudo) labelling
 
-```{r initial_model_results_selected}
-# These are the cases selected by the initial model for labelling: 
-# initial_model_results$selected
-```
-
 ```{r iterate}
 
-new_sample <- initial_model_results$selected %>% get_new_pseudolabeled_sample
+new_sample <- initial_model_results$selected %>% get_new_pseudolabeled_sample(unlabeled_data_df)
 
 current_training_set <- rbind(initial_training_set, new_sample[names(initial_training_set)])
 
@@ -172,11 +154,11 @@ iteration_results <- lapply(1:params$num_iterations, function(i){
   
   candidate_cases <- unlabeled_data_df[(unlabeled_data_df$rev_id %in% setdiff(unlabeled_data_df$rev_id,
                                                                                 ALREADY_EVALUATED)),]
-  results$selected <- select_cases(results$model, candidate_cases)
+  results$selected <- select_cases(results, candidate_cases)
 
   ALREADY_EVALUATED <<- c(ALREADY_EVALUATED, results$selected$rev_id)
 
-  next_sample <- results$selected %>% get_new_pseudolabeled_sample
+  next_sample <- results$selected %>% get_new_pseudolabeled_sample(unlabeled_data_df)
   
   current_training_set <<- rbind(current_training_set, next_sample[names(current_training_set)])
 
@@ -184,27 +166,49 @@ iteration_results <- lapply(1:params$num_iterations, function(i){
 })
 ```
 
-Mean entropy of selected samples by iteration:
+```{r save_selected_training_set, eval=FALSE}
+# current_training_set also includes the ones selected on the last round
+not_run_yet <- iteration_results[[length(iteration_results)]]$selected$rev_id
+training_set <- current_training_set[!(current_training_set$rev_id %in% not_run_yet),]
 
-```{r entropy_of_selected_samples}
-mean_entropy <- sapply(iteration_results, function(ires) mean(ires$selected$entropy))
-plot(mean_entropy, type='l', main="mean entropy of selected cases by iteration")
+write.csv(training_set, sprintf("training_set_%02d.csv", params$seed), row.names=FALSE, quote=FALSE)
+write.csv(TEST_SET, sprintf("test_set_%02d.csv", params$seed), row.names=FALSE, quote=FALSE)
 
 ```
 
-```{r iteration_results_selected}
-# These are the cases selected at each iteration, together with the scores produced by the model for that iteration.
-# lapply(iteration_results, function(ires) ires$selected)
-```
-
-This shows the change in the metrics, with each row showing an iteration. The 'negentropy' metric is the negative entropy across all three class probabilities.
+This shows the change in the metrics, with each row showing an iteration.
 
 ```{r visualize_metrics_by_iteration}
 iteration_performance <- do.call("rbind", lapply(iteration_results, function(ires) ires$performance))
 
-
-# iteration_performance <- bind_rows(lapply(iteration_results, function(ires) ires$performance))
 (performance_table <- rbind(initial_model_results$performance, iteration_performance))
+```
+
+
+## Final model results
+### Confusion Matrix
+
+```{r final_model}
+final_model_results <- iteration_results[[params$num_iterations]]
+final_model_results$confusion
+```
+
+### Performance summary
+
+Summary of performance using cases selected with active learning:
+
+```{r summary_of_preformance_using_selected_cases}
+
+(selected_sample_results <- final_model_results$performance)
+```
+
+### Visualizing improvement for actively learned model
+
+This series of ROC curves shows how performance changes with iterations of active learning.
+
+```{r visualizing_improvement, eval=TRUE}
+plot_roc_history(initial_model_results, iteration_results)
+
 ```
 
 ### Comparing learning curves of active and passive learning
@@ -249,51 +253,14 @@ performance_table$sample_selection_mode <- "active"
 performance_table$group <- 0
 
 performance_data <- bind_rows(random_ts_performance_list, performance_table)
-names(performance_data)[6] <- "run"
-```
-```{r plot_learning_curves}
+names(performance_data)[5] <- "run"
+
 performance_data %>% 
   gather(key="metric", value="value", -tss, -sample_selection_mode, -run) %>% 
   ggplot(aes(x=log10(tss), y=value, col=sample_selection_mode, group=run)) + 
     geom_line(size=1, alpha=0.5) + 
     facet_grid(metric ~ ., scales="free")
 
-```
-
-### Visualizing improvement for actively learned model
-
-
-```{r final_model}
-final_model_results <- iteration_results[[params$num_iterations]]
-```
-
-
-```{r visualize_change_in_prediction_entropy}
-plot_probability_distributions(final_model_results, "final model")
-
-```
-
-This series of ROC curves shows how performance changes with iterations of active learning.
-
-```{r visualizing_improvement, eval=TRUE}
-plot_roc_history(initial_model_results, iteration_results)
-
-```
-
-## Final model results
-### Confusion Matrix
-
-```{r final_model_confusion_matrix}
-final_model_results$confusion
-```
-
-### Performance summary
-
-Summary of performance using cases selected with active learning:
-
-```{r summary_of_preformance_using_selected_cases}
-
-(selected_sample_results <- final_model_results$performance)
 ```
 
 
@@ -335,10 +302,19 @@ mapply (
 
 For comparison, we'll build a model as though we had gone through and labeled all `r nrow(available_cases)` of the usable new examples.
 
+```{r fmr_file}
+FULL_MODEL_RESULTS_FILE <- "full_model_results.Rds"
+```
 ```{r full_model_results}
+
 training_set_full <- rbind(initial_training_set, available_cases[names(initial_training_set)])
 
-full_model_results <- fit_and_evaluate_model(training_set_full)
+if (file.exists(FULL_MODEL_RESULTS_FILE)){
+  full_model_results <- readRDS(FULL_MODEL_RESULTS_FILE)
+} else {
+  full_model_results <- fit_and_evaluate_model(training_set_full)
+  saveRDS(full_model_results, FULL_MODEL_RESULTS_FILE)
+}
 
 full_model_results$confusion
 
@@ -346,6 +322,59 @@ full_model_results$performance
 
 plot_roc_history(initial_model_results, list(final_model_results, full_model_results))
 
-plot_probability_distributions(full_model_results, "full model")
-
 ```
+
+
+## Compare initial model to final model predictions [[NEW]]
+
+```{r compare_initial_to_final}
+
+final_res <- final_model_results$test_predictions[c("rev_id", "estimated_probability")]
+names(final_res)[2] <- 'final_score'
+
+full_res <- full_model_results$test_predictions[c("rev_id", "estimated_probability")]
+names(full_res)[2] <- 'full_score'
+
+                                                  
+pred_frame <- initial_model_results$test_predictions %>% 
+  mutate(initial_score = estimated_probability) %>%
+  select(rev_id, flagged, initial_score) %>%
+  inner_join(final_res, by="rev_id") %>%
+  inner_join(full_res, by="rev_id")
+  
+pred_frame %>% ggplot(aes(x=initial_score, y=final_score, col=flagged)) + geom_point()
+
+pred_frame %>% ggplot(aes(x=initial_score, fill=flagged)) + 
+  geom_density(alpha=0.5) + ggtitle("distribution of initial scores")
+
+pred_frame %>% ggplot(aes(x=final_score, fill=flagged)) + 
+  geom_density(alpha=0.5) + ggtitle("distribution of final scores")
+ 
+pred_frame %>% ggplot(aes(x=full_score, fill=flagged)) + 
+  geom_density(alpha=0.5) + ggtitle("distribution of full-model scores")
+ 
+```
+
+Let's look at some examples of comments that are false negatives under the final model.
+```{r misclassified_examples}
+text_data <- read.csv("text_data.csv", stringsAsFactors=FALSE) # actually, we only need the text from the test set...
+
+text_data$text <- text_data$text %>% 
+  gsub("NEWLINE_TOKEN", "\n", .) %>% 
+  gsub("\n+", "\n", .) %>%
+  gsub(" +", " ", .)
+
+false_negatives <- with(final_model_results$test_predictions, 
+                        rev_id[(estimated_probability < 0.1) & flagged])
+
+false_neg_data <- text_data[text_data$rev_id %in% false_negatives, ]
+
+false_neg_data$text[1:5]
+```
+
+# TO DO:
+
+  * Featurize with an embedding that contains more dirty words (e.g., Reddit NSFW).
+  * `estimated_probability` is really just a score in the range between 0 and 1.
+  * Use a smarter uncertainty function; target utility.
+
