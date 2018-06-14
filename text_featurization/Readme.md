@@ -1,4 +1,4 @@
-Please open the following links to download the materials:
+Please open the following links to download the materials (Microsoft employees only):
 
 - https://aka.ms/tlc39
 - http://aka.ms/CoreFxIssues
