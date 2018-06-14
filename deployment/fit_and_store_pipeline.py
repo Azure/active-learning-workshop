@@ -107,7 +107,7 @@ def train(training_data, w2v_file = './miniglove_6B_50d_w2v.txt'):
     ])
 
     fitted_model = model_pipeline.fit(training_data.comment, [int(x) for x in training_data.is_attack])
-    joblib.dump(fitted_model, 'rf_attack_classifier_pipeline.pkl') 
+    joblib.dump(fitted_model, 'rf_attack_pipeline.pkl') 
     return fitted_model
 
 def evaluate(fitted_model, test_data):
@@ -125,7 +125,7 @@ def init():
     """
     Init function of the scoring script
     """
-    reloaded_model = joblib.load('rf_attack_classifier_pipeline.pkl')
+    reloaded_model = joblib.load('rf_attack_pipeline.pkl')
 
 def run(raw_data):
 
