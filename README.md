@@ -2,7 +2,7 @@
 
 ## Instructions
 
-Provision a CentOS Linux Data Science Virtual Machine; the size "Standard_DS12_v2" works well  
+Provision an Ubuntu Linux Data Science Virtual Machine; the size "Standard_DS12_v2" works well  
 (**Note: at the start of the tutorial, credentials for pre-provisioned VMs will be handed out)**:  
 https://azuremarketplace.microsoft.com/en-us/marketplace/apps/microsoft-ads.linux-data-science-vm?tab=Overview
 
