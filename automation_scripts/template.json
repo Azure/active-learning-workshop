@@ -85,8 +85,8 @@
                 "storageProfile": {
                     "imageReference": {
                         "publisher": "microsoft-ads",
-                        "offer": "linux-data-science-vm",
-                        "sku": "linuxdsvm",
+                        "offer": "linux-data-science-vm-ubuntu",
+                        "sku": "linuxdsvmubuntu",
                         "version": "latest"
                     },
                     "osDisk": {
@@ -116,9 +116,9 @@
                 }
             },
             "plan": {
-                "name": "linuxdsvm",
+                "name": "linuxdsvmubuntu",
                 "publisher": "microsoft-ads",
-                "product": "linux-data-science-vm"
+                "product": "linux-data-science-vm-ubuntu"
             }
         },
         {
