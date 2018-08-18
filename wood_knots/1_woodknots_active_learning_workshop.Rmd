@@ -30,11 +30,11 @@ L2_PENALTY <- 1e-2
 
 INITIAL_EXAMPLES_PER_CLASS <- 6  # cases from the labelled dataset used to train the initial model
 ADDITIONAL_CASES_TO_LABEL <- 12  # cases to label per iteration
-NUM_ITERATIONS <- 15
+NUM_ITERATIONS <- 50
 MONTE_CARLO_SAMPLES <- 100
 
 # This order determines the order of factor levels
-KNOT_CLASSES <- setNames(nm=c("sound_knot", "dry_knot", "encased_knot"))
+KNOT_CLASSES <- c("sound_knot", "dry_knot", "encased_knot")
 
 LABELLED_FEATURIZED_DATA <- "data/labelled_knots_featurized_resnet18.Rds"
 UNLABELLED_FEATURIZED_DATA <- "data/unlabelled_knots_featurized_large_resnet18.Rds"
@@ -46,8 +46,9 @@ labelled_knot_data_df <- readRDS(LABELLED_FEATURIZED_DATA)
 PSEUDOLABELS_FILE <- "data/unlabelled_knot_info_area_small.csv" 
 
 inputs <- grep("^Feature", names(labelled_knot_data_df), value=TRUE)
-outcome <- "knot_class"
-FORM <- formula(paste(outcome, paste(inputs, collapse="+"), sep="~"))
+FORM <- formula(paste0('~', paste(inputs, collapse=" + "), " - 1"))
+# outcome <- "knot_class"
+# FORM <- formula(paste0(outcome, '~', paste(inputs, collapse=" + "), " - 1"))
 
 ```
 
@@ -141,7 +142,7 @@ initial_model_results$selected
 
 ```{r iterate}
 
-new_sample <- initial_model_results$selected %>% pseudolabel_function %>% get_new_pseudolabelled_sample
+new_sample <- initial_model_results$selected %>% pseudolabel_function %>% get_new_pseudolabelled_sample(unlabelled_knot_data_df)
 
 current_training_set <- rbind(initial_training_set, new_sample[names(initial_training_set)])
 
@@ -155,7 +156,7 @@ iteration_results <- lapply(1:NUM_ITERATIONS, function(i){
 
   ALREADY_EVALUATED <<- c(ALREADY_EVALUATED, results$selected$path)
   results$selected_labelled <- results$selected %>% pseudolabel_function
-  next_sample <- results$selected %>% pseudolabel_function %>% get_new_pseudolabelled_sample
+  next_sample <- results$selected %>% pseudolabel_function %>% get_new_pseudolabelled_sample(unlabelled_knot_data_df)
   
   current_training_set <<- rbind(current_training_set, next_sample[names(current_training_set)])
 
@@ -172,7 +173,7 @@ plot(mean_entropy, type='l', main="mean entropy of selected cases by iteration")
 These are the cases selected at each iteration, together with the scores produced by the model for that iteration. The `knot_class` column was added by the pseudolabelling function.
 
 ```{r iteration_results_selected}
-lapply(iteration_results, function(ires) ires$selected_labelled)
+# lapply(iteration_results, function(ires) ires$selected_labelled)
 ```
 
 This shows the change in the metrics, with each row showing an iteration. The 'negentropy' metric is the negative entropy across all three class probabilities.
@@ -227,59 +228,4 @@ plot_class_histograms(final_model_results$test_predictions)
 
 ```{r classifier_evolution}
 plot_class_separation(final_model_results$test_predictions, main="Final")
-```
-
-
-## Monte Carlo Estimation of P-values
-
-What is the probability that a set of randomly chosen cases would improve the performance of the model as much as the selected cases did? We'll add the same number of examples to the training set, except that now they will be randomly chosen. We'll repeat this sampling, training, and evaluation process `r MONTE_CARLO_SAMPLES` times, and see how many of those times we beat the performance of the selected cases.
-
-
-```{r bootstrap_probability}
-
-(N <- iteration_results[[NUM_ITERATIONS]]$tss - nrow(initial_training_set))
-
-available_cases <- pseudolabel_function(unlabelled_knot_data_df)
-
-random_sample_results <- sapply(1:MONTE_CARLO_SAMPLES, function(i){
-  new_sample <- available_cases[sample(1:nrow(available_cases), N, replace=FALSE),]
-
-  training_set_new <- rbind(initial_training_set, new_sample[names(initial_training_set)])
-
-  fit_and_evaluate_model(training_set_new)$performance
-}) %>% t %>% as.data.frame
-
-```
-
-### P-values
-
-This table shows the fraction of times out of `r MONTE_CARLO_SAMPLES` tries that the randomly selected cases equalled or exceeded the performance of the actively learned cases for each metric. These numbers are estimated P-values.
-
-```{r p_values}
-
-mapply ( 
-  function(metric) sum(random_sample_results[[metric]] >= selected_sample_results[[metric]]), 
-  colnames(random_sample_results)
-) / MONTE_CARLO_SAMPLES
-
-
-```
-
-## Model trained with all available "unlabeled" cases
-
-For comparison, we'll build a model as though we had gone through and labeled all `r nrow(available_cases)` of the usable new examples.
-
-```{r full_model_results}
-training_set_full <- rbind(initial_training_set, available_cases[names(initial_training_set)])
-
-full_model_results <- fit_and_evaluate_model(training_set_full)
-
-full_model_results$confusion
-
-full_model_results$performance
-
-plot_class_histograms(full_model_results$test_predictions)
-
-plot_class_separation(full_model_results$test_predictions)
-
 ```

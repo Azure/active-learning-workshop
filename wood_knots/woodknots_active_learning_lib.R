@@ -18,11 +18,14 @@ get_pseudolabelling_function <- function(plabels_file, knot_classes=KNOT_CLASSES
   
   function(file_info){
     file_info %>%
-      mutate(knot_class = factor(pseudolabels[path], levels=knot_classes))
+      #mutate(knot_class = factor(pseudolabels[path], levels=knot_classes))
+      mutate(knot_class = pseudolabels[path])
   }
 }
 
-get_new_pseudolabelled_sample <- function(labelled_filenames){
+
+
+get_new_pseudolabelled_sample <- function(labelled_filenames, unlabelled_knot_data_df){
   labelled_filenames <- labelled_filenames[!is.na(labelled_filenames$path),]
   row.names(labelled_filenames) <- labelled_filenames$path
   pls <- unlabelled_knot_data_df[unlabelled_knot_data_df$path %in% labelled_filenames$path, ]
@@ -58,12 +61,13 @@ fit_and_evaluate_model <- function(candidate_cases, form=FORM, test_set=TEST_SET
   # NOTE: candidate_cases may include cases that are not of the classes we are modeling. 
   # We depend on labellers to remove these
   training_set_new <- candidate_cases %>% filter(knot_class %in% KNOT_CLASSES)
-  training_set_new$knot_class <- factor(as.character(training_set_new$knot_class), levels=KNOT_CLASSES)
+  #training_set_new$knot_class <- factor(as.character(training_set_new$knot_class), levels=KNOT_CLASSES)
   
 
   sken <- import("sklearn.ensemble")
-  model <- sken$RandomForestClassifier(n_estimators=101L, n_jobs=-1L, max_depth=8L)
+  model <- sken$RandomForestClassifier(n_estimators=101L, n_jobs=-1L, max_depth=4L)
   
+    
   X_train <- model.matrix(form, training_set_new)
   model$fit(X=X_train, y=training_set_new[['knot_class']])
   
@@ -106,7 +110,6 @@ fit_and_evaluate_model <- function(candidate_cases, form=FORM, test_set=TEST_SET
 select_cases <- function(model, available_cases, N=ADDITIONAL_CASES_TO_LABEL){
   
   test_data <- available_cases
-  test_data$knot_class = numeric(dim(test_data)[1]) # dummy class column
   test_data <- model.matrix(FORM, test_data)
   pred_prob <- model$predict_proba(test_data)
   pred_prob <- as.data.frame(pred_prob)
@@ -119,16 +122,9 @@ select_cases <- function(model, available_cases, N=ADDITIONAL_CASES_TO_LABEL){
   
   predictions_df <- cbind(predictions, pred_prob)
   
-  predictions_df$cluster_id <- available_cases %>%
-    dist(method="euclidean") %>%
-    hclust(method="ward.D2") %>%
-    cutree(k=N)
-  
-  selected <- predictions_df %>%
-    mutate(entropy=entropy(sound_knot, dry_knot)) %>%
-    group_by(cluster_id) %>%
-    arrange(-entropy) %>%
-    slice(which.max(entropy)) %>%
+  selected <- predictions_df %>% 
+    mutate(entropy=entropy(encased_knot, dry_knot)) %>% 
+    top_n(N, entropy) %>% 
     as.data.frame
   
   return(selected)
