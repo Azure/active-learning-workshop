@@ -4,10 +4,6 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-.libPaths( c( "/data/mlserver/9.2.1/libraries/RServer", .libPaths()))
-library(RevoScaleR)
-library(MicrosoftML)
-
 knitr::opts_chunk$set(echo = TRUE, cache=FALSE, message=FALSE, warning=FALSE, fig.height=7.5)
 rxOptions(reportProgress=0)
 ```
@@ -17,14 +13,13 @@ rxOptions(reportProgress=0)
 This is a followup to our earlier blog post "[Featurizing images: the shallow end of deep learning](http://blog.revolutionanalytics.com/2017/09/wood-knots.html#more)". That article contains the code for generating the features for the training and test datasets, which were saved to a csv file. Here we begin by loading that file.
 
 
-
 ```{r parameters}
 
 ### Libraries ###
 library(dplyr)
 library(tidyr)
 library(ggplot2)
-
+library(reticulate)
 library(pROC)
 
 ### Meta-hyperparameters ###
@@ -34,15 +29,12 @@ L1_PENALTY <- 1e-2
 L2_PENALTY <- 1e-2
 
 INITIAL_EXAMPLES_PER_CLASS <- 6  # cases from the labelled dataset used to train the initial model
-
 ADDITIONAL_CASES_TO_LABEL <- 12  # cases to label per iteration
-
-NUM_ITERATIONS <- 15 # 10
-
+NUM_ITERATIONS <- 50
 MONTE_CARLO_SAMPLES <- 100
 
 # This order determines the order of factor levels
-KNOT_CLASSES <- setNames(nm=c("sound_knot", "dry_knot", "encased_knot"))
+KNOT_CLASSES <- c("sound_knot", "dry_knot", "encased_knot")
 
 LABELLED_FEATURIZED_DATA <- "data/labelled_knots_featurized_resnet18.Rds"
 UNLABELLED_FEATURIZED_DATA <- "data/unlabelled_knots_featurized_large_resnet18.Rds"
@@ -50,12 +42,13 @@ UNLABELLED_FEATURIZED_DATA <- "data/unlabelled_knots_featurized_large_resnet18.R
 unlabelled_knot_data_df <- readRDS(UNLABELLED_FEATURIZED_DATA)
 labelled_knot_data_df <- readRDS(LABELLED_FEATURIZED_DATA)
 
-PSEUDOLABELS_FILE <- "data/unlabelled_knot_info_area_small.csv" # "unlabelled_knot_info.csv" # We'll pretend these come from our labellers
+# We'll pretend these come from our labellers
+PSEUDOLABELS_FILE <- "data/unlabelled_knot_info_area_small.csv" 
 
 inputs <- grep("^Feature", names(labelled_knot_data_df), value=TRUE)
-outcome <- "knot_class"
-FORM <- formula(paste(outcome, paste(inputs, collapse="+"), sep="~"))
-
+FORM <- formula(paste0('~', paste(inputs, collapse=" + "), " - 1"))
+# outcome <- "knot_class"
+# FORM <- formula(paste0(outcome, '~', paste(inputs, collapse=" + "), " - 1"))
 
 ```
 
@@ -90,28 +83,6 @@ source("woodknots_active_learning_lib.R")
 pseudolabel_function <- get_pseudolabelling_function(PSEUDOLABELS_FILE, KNOT_CLASSES)
 
 initial_model_results <- fit_and_evaluate_model(initial_training_set)
-
-select_cases <- function(model, available_cases, N=ADDITIONAL_CASES_TO_LABEL){
-  predictions_df <- rxPredict(model, available_cases, extraVarsToWrite=c("path"))
-  names(predictions_df) <- c("path", "pred_class", "sound_knot", "dry_knot", "encased_knot")
-  
-  predictions_df$cluster_id <- available_cases %>%
-    dist(method="euclidean") %>%
-    hclust(method="ward.D2") %>%
-    cutree(k=N)
-
-  selected <- predictions_df %>%
-    mutate(entropy=entropy(sound_knot, dry_knot)) %>%
-    group_by(cluster_id) %>%
-    arrange(-entropy) %>%
-    slice(which.max(entropy)) %>%
-    as.data.frame
- 
-  return(selected)
-
-}   
-
-initial_model_results$selected <- select_cases(initial_model_results$model, unlabelled_knot_data_df)
 
 ```
 
@@ -153,7 +124,6 @@ Here we'll stick to a 2D representation, where the yellow background indicates r
 
 ```{r plot_initial_class_separation}
 
-
 plot_class_separation(initial_model_results$test_predictions)
 
 ```
@@ -163,13 +133,16 @@ plot_class_separation(initial_model_results$test_predictions)
 These are the cases selected by the initial model for labelling:
 
 ```{r initial_model_results_selected}
+
+initial_model_results$selected <- select_cases(initial_model_results$model, unlabelled_knot_data_df)
+
 initial_model_results$selected
 
 ```
 
 ```{r iterate}
 
-new_sample <- initial_model_results$selected %>% pseudolabel_function %>% get_new_pseudolabelled_sample
+new_sample <- initial_model_results$selected %>% pseudolabel_function %>% get_new_pseudolabelled_sample(unlabelled_knot_data_df)
 
 current_training_set <- rbind(initial_training_set, new_sample[names(initial_training_set)])
 
@@ -183,7 +156,7 @@ iteration_results <- lapply(1:NUM_ITERATIONS, function(i){
 
   ALREADY_EVALUATED <<- c(ALREADY_EVALUATED, results$selected$path)
   results$selected_labelled <- results$selected %>% pseudolabel_function
-  next_sample <- results$selected %>% pseudolabel_function %>% get_new_pseudolabelled_sample
+  next_sample <- results$selected %>% pseudolabel_function %>% get_new_pseudolabelled_sample(unlabelled_knot_data_df)
   
   current_training_set <<- rbind(current_training_set, next_sample[names(current_training_set)])
 
@@ -200,7 +173,7 @@ plot(mean_entropy, type='l', main="mean entropy of selected cases by iteration")
 These are the cases selected at each iteration, together with the scores produced by the model for that iteration. The `knot_class` column was added by the pseudolabelling function.
 
 ```{r iteration_results_selected}
-lapply(iteration_results, function(ires) ires$selected_labelled)
+# lapply(iteration_results, function(ires) ires$selected_labelled)
 ```
 
 This shows the change in the metrics, with each row showing an iteration. The 'negentropy' metric is the negative entropy across all three class probabilities.
@@ -255,59 +228,4 @@ plot_class_histograms(final_model_results$test_predictions)
 
 ```{r classifier_evolution}
 plot_class_separation(final_model_results$test_predictions, main="Final")
-```
-
-
-## Monte Carlo Estimation of P-values
-
-What is the probability that a set of randomly chosen cases would improve the performance of the model as much as the selected cases did? We'll add the same number of examples to the training set, except that now they will be randomly chosen. We'll repeat this sampling, training, and evaluation process `r MONTE_CARLO_SAMPLES` times, and see how many of those times we beat the performance of the selected cases.
-
-
-```{r bootstrap_probability}
-
-(N <- iteration_results[[NUM_ITERATIONS]]$tss - nrow(initial_training_set))
-
-available_cases <- pseudolabel_function(unlabelled_knot_data_df)
-
-random_sample_results <- sapply(1:MONTE_CARLO_SAMPLES, function(i){
-  new_sample <- available_cases[sample(1:nrow(available_cases), N, replace=FALSE),]
-
-  training_set_new <- rbind(initial_training_set, new_sample[names(initial_training_set)])
-
-  fit_and_evaluate_model(training_set_new)$performance
-}) %>% t %>% as.data.frame
-
-```
-
-### P-values
-
-This table shows the fraction of times out of `r MONTE_CARLO_SAMPLES` tries that the randomly selected cases equalled or exceeded the performance of the actively learned cases for each metric. These numbers are estimated P-values.
-
-```{r p_values}
-
-mapply ( 
-  function(metric) sum(random_sample_results[[metric]] >= selected_sample_results[[metric]]), 
-  colnames(random_sample_results)
-) / MONTE_CARLO_SAMPLES
-
-
-```
-
-## Model trained with all available "unlabeled" cases
-
-For comparison, we'll build a model as though we had gone through and labeled all `r nrow(available_cases)` of the usable new examples.
-
-```{r full_model_results}
-training_set_full <- rbind(initial_training_set, available_cases[names(initial_training_set)])
-
-full_model_results <- fit_and_evaluate_model(training_set_full)
-
-full_model_results$confusion
-
-full_model_results$performance
-
-plot_class_histograms(full_model_results$test_predictions)
-
-plot_class_separation(full_model_results$test_predictions)
-
 ```
