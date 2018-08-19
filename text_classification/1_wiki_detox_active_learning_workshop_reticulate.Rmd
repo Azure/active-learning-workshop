@@ -31,9 +31,15 @@ library(pROC)
 
 source("active_learning_lib_reticulate.R")
 
-FEATURIZED_DATA_FILE <- "featurized_wiki_comments_attack.Rds"
+FEATURIZED_DATA_FILE <- "attacks_use_encoded.Rds" 
 RANDOM_TS_PERFORMANCE_FILE <- "passive_learning_curves_data.Rds"
 TEST_SET_SIZE <- 10000
+
+if (!file.exists(FEATURIZED_DATA_FILE)){
+  storage_address <- 'https://altutorialweu.blob.core.windows.net/activelearningdemo/'
+  download_url <- paste0(storage_address, FEATURIZED_DATA_FILE)
+  download.file(download_url, FEATURIZED_DATA_FILE)
+}
 ```
 
 ```{r print_parameters}
