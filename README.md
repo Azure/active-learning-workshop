@@ -26,6 +26,10 @@ You can now log in to RStudio Server at http://hostname:8787 (unlike JupyterHub,
 
 To provision many Data Science Virtual Machines using automation, see the scripts and the README file in https://github.com/Azure/active-learning-workshop/blob/master/automation_scripts
 
+Download assets for image labeling actvity:
+1) Download release package (zip) of  Visual Object Tagging Tool ([VOTT](https://github.com/Microsoft/VoTT/releases))
+2) Dowload images pre-labeled by Active Learning pipeline from [here](https://altutorialweu.blob.core.windows.net/activelearningexersize/ActivityVerifyLabels.zip).  
+
 ## Abstract
 
 Accessed via R and Python APIs, pre-trained Deep Learning models and Transfer Learning are making custom classification with large or small amounts of labeled data easily accessible to data scientists and application developers. This tutorial walks you through creating end-to-end data science solutions in R and Python on cloud-based infrastructure and consuming them in production.
