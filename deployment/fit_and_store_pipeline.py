@@ -55,7 +55,7 @@ class AvgWordVectorFeaturizer(object):
 
 ###
 
-data_files_dir = 'E:/Projects/MLADS18S/'
+data_files_dir = 'text_data/'
 
 def create_small_w2v_file():
     # Location of source file on Tomas' computer
@@ -77,7 +77,7 @@ def unzip_file_here(f):
 def create_train_test_split():
     
     # Location of original file of "attacks" on Tomas' computer
-    text_data_file = 'attack_data.csv'
+    text_data_file = data_files_dir + 'attack_data.csv'
     # this is the pre-featurized subset of the attacks
     training_set_file = 'training_set_01.csv'
 
