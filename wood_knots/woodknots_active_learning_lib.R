@@ -18,11 +18,14 @@ get_pseudolabelling_function <- function(plabels_file, knot_classes=KNOT_CLASSES
   
   function(file_info){
     file_info %>%
-      mutate(knot_class = factor(pseudolabels[path], levels=knot_classes))
+      #mutate(knot_class = factor(pseudolabels[path], levels=knot_classes))
+      mutate(knot_class = pseudolabels[path])
   }
 }
 
-get_new_pseudolabelled_sample <- function(labelled_filenames){
+
+
+get_new_pseudolabelled_sample <- function(labelled_filenames, unlabelled_knot_data_df){
   labelled_filenames <- labelled_filenames[!is.na(labelled_filenames$path),]
   row.names(labelled_filenames) <- labelled_filenames$path
   pls <- unlabelled_knot_data_df[unlabelled_knot_data_df$path %in% labelled_filenames$path, ]
@@ -30,8 +33,8 @@ get_new_pseudolabelled_sample <- function(labelled_filenames){
   pls
 }
 
-fit_and_evaluate_model <- function(candidate_cases,  # pseudolabeller, 
-                                   form=FORM, test_set=TEST_SET){
+
+fit_and_evaluate_model <- function(candidate_cases, form=FORM, test_set=TEST_SET){
   
   compute_roc <- function(dframe){
     library(pROC)
@@ -58,38 +61,75 @@ fit_and_evaluate_model <- function(candidate_cases,  # pseudolabeller,
   # NOTE: candidate_cases may include cases that are not of the classes we are modeling. 
   # We depend on labellers to remove these
   training_set_new <- candidate_cases %>% filter(knot_class %in% KNOT_CLASSES)
-  training_set_new$knot_class <- factor(as.character(training_set_new$knot_class), levels=KNOT_CLASSES)
+  #training_set_new$knot_class <- factor(as.character(training_set_new$knot_class), levels=KNOT_CLASSES)
   
-  progress_messages <- capture.output({
-    fit_new <- rxLogisticRegression(form, training_set_new,
-                                    type="multiClass", 
-                                    l1Weight=L1_PENALTY, l2Weight=L2_PENALTY,
-                                    reportProgress=0, verbose=0, optTol=1e-12)
+
+  sken <- import("sklearn.ensemble")
+  model <- sken$RandomForestClassifier(n_estimators=101L, n_jobs=-1L, max_depth=4L)
+  
     
-    pred_test <- rxPredict(fit_new, test_set, extraVarsToWrite=c("path", "knot_class"))
-    names(pred_test) <- c("path", "knot_class", "pred_class", "sound_knot", "dry_knot", "encased_knot")
-    
-    roc_list <- compute_roc(pred_test)
-    
-    results <- list(
-      model=fit_new,
-      tss=nrow(training_set_new),
-      test_predictions=pred_test,
-      # selected=selected, # unlabelled
-      roc_list = roc_list,
-      performance = c(accuracy=with(pred_test, sum(pred_class == knot_class)/length(knot_class)),
-                      neg_logloss = -prediction_logloss(pred_test),
-                      auc_sound = auc(roc_list[['sound']]),
-                      auc_dry = auc(roc_list[['dry']]),
-                      auc_encased = auc(roc_list[['encased']]),
-                      negentropy = -mean(prediction_entropy(pred_test))
-      ),
-      confusion = with(pred_test, table(knot_class, pred_class))
-    )
-  })
+  X_train <- model.matrix(form, training_set_new)
+  model$fit(X=X_train, y=training_set_new[['knot_class']])
+  
+  X_test <- model.matrix(form, test_set)
+  
+  pred_prob <- model$predict_proba(X_test)
+  pred_prob <- as.data.frame(pred_prob)
+  names(pred_prob) <- model$classes_
+  
+  pred_class <- model$classes_[apply(pred_prob, 1, which.max)]
+  
+  pred_test <- data.frame(path = test_set$path,
+                          knot_class = test_set$knot_class,
+                          pred_class = pred_class)
+  
+  pred_test <- cbind(pred_test, pred_prob)
+  
+  roc_list <- compute_roc(pred_test)
+  
+  results <- list(
+    model=model,
+    tss=nrow(training_set_new),
+    test_predictions=pred_test,
+    # selected=selected, # unlabelled
+    roc_list = roc_list,
+    performance = c(accuracy=with(pred_test, sum(pred_class == knot_class)/length(knot_class)),
+                    neg_logloss = -prediction_logloss(pred_test),
+                    auc_sound = auc(roc_list[['sound']]),
+                    auc_dry = auc(roc_list[['dry']]),
+                    auc_encased = auc(roc_list[['encased']]),
+                    negentropy = -mean(prediction_entropy(pred_test))
+    ),
+    confusion = with(pred_test, table(knot_class, pred_class))
+  )
   
   return(results)
 }
+
+
+select_cases <- function(model, available_cases, N=ADDITIONAL_CASES_TO_LABEL){
+  
+  test_data <- available_cases
+  test_data <- model.matrix(FORM, test_data)
+  pred_prob <- model$predict_proba(test_data)
+  pred_prob <- as.data.frame(pred_prob)
+  names(pred_prob) <- model$classes_
+  
+  pred_class <- model$classes_[apply(pred_prob, 1, which.max)]
+  
+  predictions <- data.frame(path = available_cases$path,
+                          pred_class = pred_class)
+  
+  predictions_df <- cbind(predictions, pred_prob)
+  
+  selected <- predictions_df %>% 
+    mutate(entropy=entropy(encased_knot, dry_knot)) %>% 
+    top_n(N, entropy) %>% 
+    as.data.frame
+  
+  return(selected)
+  
+} 
 
 plot_roc_history <- function(kclass, initial_results, results_history){
   roc0 <- initial_results$roc_list[[kclass]]
