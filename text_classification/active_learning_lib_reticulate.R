@@ -1,3 +1,5 @@
+### Demonstrate fitting a python model using reticulate
+### Return the model (but don't use it). Return it and evaluation stats on the test set. 
 
 get_new_pseudolabeled_sample <- function(labeled_filenames, unlabeled_data_df){
   unlabeled_data_df[unlabeled_data_df$rev_id %in% labeled_filenames$rev_id, ]
