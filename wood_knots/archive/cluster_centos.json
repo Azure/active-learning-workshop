@@ -1,0 +1,26 @@
+{
+  "name": "tutorial053",
+  "vmSize": "Standard_D3_v2", 
+  "maxTasksPerNode": 1,       
+  "poolSize": {
+    "dedicatedNodes": {
+      "min": 2,               
+      "max": 2
+    },
+    "lowPriorityNodes": {
+      "min": 0,
+      "max": 0                
+    },
+    "autoscaleFormula": "QUEUE"
+  },
+  "rPackages": {
+    "cran": [ ],
+    "github": [ ],
+    "bioconductor": []
+  },
+  "commandLine": [
+    "rpm -Uvh http://packages.microsoft.com/config/rhel/7/packages-microsoft-prod.rpm",
+    "yum -y install microsoft-mlserver-all-9.2.1",
+    "/opt/microsoft/mlserver/9.2.1/bin/R/activate.sh -a -l"
+  ]
+}

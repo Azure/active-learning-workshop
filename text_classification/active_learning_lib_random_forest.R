@@ -1,12 +1,11 @@
+library(randomForest)
+library(pROC)
 
 get_new_pseudolabeled_sample <- function(labeled_filenames, unlabeled_data_df){
   unlabeled_data_df[unlabeled_data_df$rev_id %in% labeled_filenames$rev_id, ]
 }
 
 fit_and_evaluate_model <- function(candidate_cases, form=FORM, test_set=TEST_SET){
-  library(randomForest)
-  library(pROC)
-  
   candidate_cases$flagged <- factor(candidate_cases$flagged)
   
   compute_roc <- function(pred_df){

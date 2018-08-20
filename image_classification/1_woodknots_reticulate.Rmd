@@ -1,0 +1,243 @@
+---
+title: "Active Learning for Image Classification"
+output: html_document
+params:
+  seed: 1                             # seed for random number generator
+  initial_examples_per_class: 20      # number of cases from the labeled dataset used to train the initial model
+  examples_to_label_per_iteration: 10 # number of cases to label and add to training set per iteration
+  num_iterations: 20                  # number of iterations of active learning
+  monte_carlo_samples: 100            # times to repeat random sampling of training cases for estimating p-values
+  mu: 1.5
+  sigma: 0.2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache=FALSE, message=FALSE, warning=FALSE, fig.height=7.5)
+# params <- list(seed=1, initial_examples_per_class=20, examples_to_label_per_iteration=10,num_iterations=20, monte_carlo_samples=100, mu=1.5, sigma=0.5)
+```
+
+# Classifying wood knots
+
+This is a followup to our earlier blog post "[Featurizing images: the shallow end of deep learning](http://blog.revolutionanalytics.com/2017/09/wood-knots.html#more)". That article contains the code for generating the features for the training and test datasets, which were saved to a csv file. Here we begin by loading that file.
+
+# Parameters for this run
+```{r run_parameters, echo=FALSE}
+knitr::kable(data.frame(parameter=names(params), value=unlist(params)))
+```
+
+```{r fixed_parameters}
+
+### Libraries ###
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(reticulate)
+library(pROC)
+
+source("woodknots_active_learning_lib_reticulate.R")
+### Meta-hyperparameters ###
+set.seed(params$seed)  ###
+
+# This order determines the order of factor levels
+KNOT_CLASSES <- c("sound_knot", "dry_knot", "encased_knot")
+
+LABELLED_FEATURIZED_DATA <- "data/labelled_knots_featurized_resnet18.Rds"
+UNLABELLED_FEATURIZED_DATA <- "data/unlabelled_knots_featurized_large_resnet18.Rds"
+
+unlabelled_knot_data_df <- readRDS(UNLABELLED_FEATURIZED_DATA)
+labelled_knot_data_df <- readRDS(LABELLED_FEATURIZED_DATA)
+
+# We'll pretend these come from our labellers
+PSEUDOLABELS_FILE <- "data/unlabelled_knot_info_area_small.csv" 
+
+inputs <- grep("^Feature", names(labelled_knot_data_df), value=TRUE)
+FORM <- formula(paste0('~', paste(inputs, collapse=" + "), " - 1"))
+# outcome <- "knot_class"
+# FORM <- formula(paste0(outcome, '~', paste(inputs, collapse=" + "), " - 1"))
+
+```
+
+
+### Split labelled data into training and test sets
+
+```{r split_train_and_test_sets}
+
+class_samples <- lapply(KNOT_CLASSES, function(kc) sample(which(labelled_knot_data_df$knot_class == kc), params$initial_examples_per_class))
+
+in_training_set <- (1:nrow(labelled_knot_data_df) %in% unlist(class_samples))
+
+initial_training_set <- labelled_knot_data_df[in_training_set,]
+TEST_SET <- labelled_knot_data_df[!in_training_set,]
+
+table(initial_training_set$knot_class)
+
+table(TEST_SET$knot_class)
+table(TEST_SET$knot_class)/nrow(TEST_SET)
+```
+
+
+## Initial model for knot classes
+
+First we build a model on the available training data, and test on the test data. This model will focus on classifying a knot image into three categories: "sound_knot", "dry_knot", and "encased_knot". In the blog post there was also a category for "decayed_knot", but we will consider decay a separate attribute, and not use it in this model. We will use only a small number of the available labelled cases for training, and the rest for testing. This makes a larger test set and a smaller training set than in the blog post.
+
+### Fit model to initial training set
+
+```{r train_model}
+
+pseudolabel_function <- get_pseudolabelling_function(PSEUDOLABELS_FILE, KNOT_CLASSES)
+
+initial_model_results <- fit_and_evaluate_model(initial_training_set)
+
+```
+
+## Results for initial model
+
+
+### ROC curves
+
+```{r roc_curves}
+mapply(plot, x=initial_model_results$roc_list, main=names(initial_model_results$roc_list), print.auc=TRUE) %>% invisible
+```
+
+#### Confusion matrix
+
+```{r initial_model_confusion}
+
+initial_model_results$confusion
+
+```
+
+### Performance summary
+
+```{r initial_model_performance}
+initial_model_results$performance
+
+```
+
+### Histograms of class scores
+
+```{r class_score_histograms}
+
+plot_class_histograms(initial_model_results$test_predictions)
+
+```
+
+### Plot of test cases on entropy surface
+
+Here we'll stick to a 2D representation, where the yellow background indicates regions of lower entropy.
+
+```{r plot_initial_class_separation}
+
+plot_class_separation(initial_model_results$test_predictions, main="Initial Model")
+
+```
+
+## Iterate modelling, case selection, and (pseudo) labelling
+
+These are the cases selected by the initial model for labelling:
+
+```{r initial_model_results_selected}
+
+initial_model_results$selected <- select_cases(initial_model_results$model, unlabelled_knot_data_df, params)
+
+pseudolabel_function(initial_model_results$selected)
+
+```
+
+```{r iterate}
+
+new_sample <- initial_model_results$selected %>% pseudolabel_function %>% get_new_pseudolabelled_sample(unlabelled_knot_data_df)
+
+current_training_set <- rbind(initial_training_set, new_sample[names(initial_training_set)])
+
+ALREADY_EVALUATED <- initial_model_results$selected$path
+
+previous_predictions <- initial_model_results$test_predictions
+
+iteration_results <- lapply(1:params$num_iterations, function(i){
+  results <- fit_and_evaluate_model(current_training_set)
+
+  plot_class_separation(results$test_predictions, previous_predictions, main=sprintf("Round %d", i))
+  previous_predictions <<- results$test_predictions
+
+  candidate_cases <- unlabelled_knot_data_df[(unlabelled_knot_data_df$path %in% setdiff(unlabelled_knot_data_df$path, ALREADY_EVALUATED)),]
+  results$selected <- select_cases(results$model, candidate_cases, params)
+  
+  ALREADY_EVALUATED <<- c(ALREADY_EVALUATED, results$selected$path)
+  results$selected_labelled <- results$selected %>% pseudolabel_function
+  
+  print(results$selected_labelled)
+  
+  next_sample <- results$selected %>% pseudolabel_function %>% get_new_pseudolabelled_sample(unlabelled_knot_data_df)
+  
+  current_training_set <<- rbind(current_training_set, next_sample[names(current_training_set)])
+  
+  results
+})
+```
+
+
+```{r mean_entropy_of_selected_cases_by_iteration}
+mean_entropy <- sapply(iteration_results, function(ires) mean(ires$selected$entropy))
+plot(mean_entropy, type='l', main="mean entropy of selected cases by iteration")
+```
+
+These are the cases selected at each iteration, together with the scores produced by the model for that iteration. The `knot_class` column was added by the pseudolabelling function.
+
+```{r iteration_results_selected}
+# lapply(iteration_results, function(ires) ires$selected_labelled)
+```
+
+This shows the change in the metrics, with each row showing an iteration. The 'negentropy' metric is the negative entropy across all three class probabilities.
+
+```{r visualize_metrics_by_iteration}
+do.call("rbind", lapply(iteration_results, function(ires) ires$performance))
+
+```
+
+### Visualizing improvement for actively learned model
+
+Here we plot a series of ROC curves showing how performance changes with iterations of active learning.
+
+```{r visualizing_improvement}
+
+plot_roc_history("sound", initial_model_results, iteration_results)
+plot_roc_history("dry", initial_model_results, iteration_results)
+plot_roc_history("encased", initial_model_results, iteration_results)
+```
+
+
+### Final model results
+
+```{r final_model}
+final_model_results <- iteration_results[[params$num_iterations]]
+```
+
+### Confusion Matrix
+
+```{r final_model_confusion_matrix}
+final_model_results$confusion
+```
+
+### Performance summary
+
+Summary of performance using cases selected with active learning:
+
+```{r summary_of_preformance_using_selected_cases}
+
+(selected_sample_results <- final_model_results$performance)
+```
+
+### Histograms of class scores for final model
+
+```{r final_class_score_histograms}
+
+plot_class_histograms(final_model_results$test_predictions)
+
+```
+
+### Entropy surface plot
+
+```{r classifier_evolution}
+plot_class_separation(final_model_results$test_predictions, main="Final")
+```
