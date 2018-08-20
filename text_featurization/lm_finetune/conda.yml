@@ -1,0 +1,28 @@
+name: embeddings
+channels:
+  - defaults
+dependencies:
+  - pip=10.0.1
+  - python=3.6.6
+  - setuptools
+  - pip:
+    - gensim==3.5.0
+    - ipykernel
+    - ipython
+    - jupyter-client
+    - jupyter-core
+    - keras
+    - matplotlib
+    - mittens
+    - numpy<=1.14.5,>=1.13.3
+    - pandas
+    - pyunpack
+    - scikit-learn
+    - seaborn
+    - setuptools<=39.1.0
+    - spacy
+    - tensorboard
+    - tensorflow>=1.8.0
+    - tensorflow-hub
+    - tqdm
+prefix: /anaconda/envs/embeddings
