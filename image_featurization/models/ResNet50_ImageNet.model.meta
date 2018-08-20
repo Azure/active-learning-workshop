@@ -1,0 +1,11 @@
+{
+  "name": "ResNet50",
+  "inputNode": 0,
+  "size": 102647687,
+  "uri": "models/ResNet50_ImageNet.model",
+  "numLayers": 51,
+  "layerNames": ["outputs", "fc1000", "res5c_relu", "res5c_branch2b_relu", "res5c_branch2a_relu", "res5b_relu", "res5b_branch2b_relu", "res5b_branch2a_relu", "res5a_relu", "res5a_branch2b_relu", "res5a_branch2a_relu", "res4f_relu", "res4f_branch2b_relu", "res4f_branch2a_relu", "res4e_relu", "res4e_branch2b_relu", "res4e_branch2a_relu", "res4d_relu", "res4d_branch2b_relu", "res4d_branch2a_relu", "res4c_relu", "res4c_branch2b_relu", "res4c_branch2a_relu", "res4b_relu", "res4b_branch2b_relu", "res4b_branch2a_relu", "res4a_relu", "res4a_branch2b_relu", "res4a_branch2a_relu", "res3d_relu", "res3d_branch2b_relu", "res3d_branch2a_relu", "res3c_relu", "res3c_branch2b_relu", "res3c_branch2a_relu", "res3b_relu", "res3b_branch2b_relu", "res3b_branch2a_relu", "res3a_relu", "res3a_branch2b_relu", "res3a_branch2a_relu", "res2c_relu", "res2c_branch2b_relu", "res2c_branch2a_relu", "res2b_relu", "res2b_branch2b_relu", "res2b_branch2a_relu", "res2a_relu", "res2a_branch2b_relu", "res2a_branch2a_relu", "conv1_relu"],
+  "modelType": "image",
+  "hash": "c85ef22b3b31b64b541b1798f589d786c25f726d7b1f3cb254493b01493d6a99",
+  "dataset": "ImageNet"
+}
