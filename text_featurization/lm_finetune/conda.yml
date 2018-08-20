@@ -16,6 +16,7 @@ dependencies:
     - mittens
     - numpy
     - pandas
+    - pyunpack
     - scikit-learn
     - seaborn
     - spacy
