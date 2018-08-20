@@ -11,7 +11,7 @@ sudo systemctl start rstudio-server
 sudo chown -R remoteuser:remoteuser /data
 
 # create conda environment
-wget https://raw.githubusercontent.com/Azure/active-learning-workshop/master/text_featurization/lm_finetune/conda.yml
+cd text_featurization/lm_finetune
 conda env create -f conda.yml
 source activate py35
 pip install ipykernel
