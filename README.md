@@ -43,7 +43,7 @@ Accessed via R and Python APIs, pre-trained Deep Learning models and Transfer Le
 We have two hands-on, end-to-end active learning-based classification examples:
 
 1. Text Classification: flagging personal attacks for moderating public discussions.
-1. Image Classification: identifying different types of wood knots in lumber.
+2. Image Classification: identifying different types of wood knots in lumber.
 
 Both examples will use similar active learning approaches, but different aspects will be emphasized in the two parts:  
 
@@ -53,6 +53,20 @@ Both examples will use similar active learning approaches, but different aspects
 * iterative model building and active learning from selected cases
 * deployment and consumption of scoring services
 * scaling with distributed computing
+
+## Detailed Outline of the Tutorial:
+1. Welcome and Virtual Machine Setup  
+2. Use Case #1: Active Learning for text classification  
+   2.1 Text featurization using Deep Learning  
+   2.2 Active Learning by Uncertainty Sampling  
+   2.3 Active Learning for text classification  with R and Python  
+   2.4 How Uncertainty Sampling fails  
+   2.5 Hyperparameter tuning using mmlspark  
+   2.6 Serving model using mmlspark  
+3. Use Case #2: Building a custom image classifier for wood knots  
+   3.1 Active Learning for object detection   
+   3.2 Featurizing images at scale for building custom image classifier 
+   
 
 ## Contributing
 
