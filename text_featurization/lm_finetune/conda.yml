@@ -1,4 +1,4 @@
-name: tensorflow
+name: embeddings
 channels:
   - defaults
 dependencies:
@@ -28,4 +28,4 @@ dependencies:
   - tensorflow-hub==0.1.1
   - tqdm
   - urllib3
-prefix: /anaconda/envs/tensorflow
+prefix: /anaconda/envs/embeddings
