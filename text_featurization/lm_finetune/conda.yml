@@ -4,28 +4,23 @@ channels:
 dependencies:
   - pip=10.0.1
   - python=3.6.6
-- pip:
-  - gensim
-  - ipykernel
-  - ipython
-  - ipython-genutils==0.2.0
-  - jupyter-client==5.2.3
-  - jupyter-core==4.4.0
-  - keras==2.2.2
-  - keras-applications
-  - keras-preprocessing
-  - markdown
-  - matplotlib>=2.2.3
-  - numpy<=1.14.5,>=1.13.3
-  - pandas>=0.23.4
-  - pyunpack
-  - seaborn>=0.9.0
   - setuptools
-  - sklearn
-  - spacy>=2.0.12
-  - tensorboard>=1.8.0
-  - tensorflow>=1.8.0
-  - tensorflow-hub==0.1.1
-  - tqdm
-  - urllib3
+  - pip:
+    - gensim==3.5.0
+    - ipykernel
+    - ipython
+    - jupyter-client
+    - jupyter-core
+    - keras
+    - matplotlib
+    - mittens
+    - numpy
+    - pandas
+    - scikit-learn
+    - seaborn
+    - spacy
+    - tensorboard
+    - tensorflow>=1.8.0
+    - tensorflow-hub
+    - tqdm
 prefix: /anaconda/envs/embeddings
