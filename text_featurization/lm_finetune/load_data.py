@@ -13,6 +13,7 @@ import csv
 import sys
 import time
 import tarfile
+import pyunpack
 import spacy
 from collections import Counter, defaultdict
 
@@ -132,7 +133,7 @@ def load_imdb_data(data_dir:str=data_dir, out_numpy:bool=False):
         df.loc[25000:, "sample"] = "test"
         return df
 
-def load_wiki_attacks():
+def load_wiki_attacks(data_dir=data_dir):
 
     if not data_dir.exists():
         data_dir.mkdir(parents=True)
@@ -141,10 +142,8 @@ def load_wiki_attacks():
         target = str(data_dir / "text_data.zip")
 
         downloader(source, target)
-        import zipfile
-        with open(str(data_dir / "text_data.zip")) as f:
-            zf = zipfile.ZipFile(f)
-            zf.extractall(str(data_dir / "attacks"))
+        pyunpack.Archive(target).extractall(data_dir)
+
 
     toxic_df = pd.read_csv(str(data_dir / "text_data" / "attack_data.csv"), encoding="ISO-8859-1") 
     toxic_df["comment_text"] = toxic_df.comment.replace(r'NEWLINE_TOKEN|[^.,A-Za-z0-9]+',' ', regex=True) 
@@ -153,7 +152,7 @@ def load_wiki_attacks():
 
 
 
-def load_attack_encoded():
+def load_attack_encoded(data_dir=data_dir):
     
     source = "https://activelearnwestus.blob.core.windows.net/activelearningdemo/attacks_use_encoded.csv"
     
@@ -165,16 +164,18 @@ def load_attack_encoded():
     
     return attacks_features
 
-def download_glove():
+def download_glove(data_dir=data_dir):
     
     source = "http://nlp.stanford.edu/data/glove.6B.zip"
     target = data_dir.joinpath("glove6B.zip")
+    
     if not target.exists():
         downloader(source, target)
-    import zipfile
-    with open(str(target)) as f:
-        zf = zipfile.ZipFile(f)
-        zipfile.extractall(f)
+        pyunpack.Archive(target).extractall(data_dir)
+    # import zipfile
+    # with open(str(target)) as f:
+    #     zf = zipfile.ZipFile(f)
+    #     zipfile.extractall(f)
         
 def load_glove_k2v(glove_src, w2v_tgt):
     
