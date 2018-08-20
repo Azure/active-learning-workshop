@@ -65,7 +65,8 @@ Both examples will use similar active learning approaches, but different aspects
    2.6 Serving model using mmlspark  
 3. Use Case #2: Building a custom image classifier for wood knots  
    3.1 Active Learning for object detection   
-   3.2 Featurizing images at scale for building custom image classifier 
+   3.2 Featurizing images at scale for building custom image classifier
+   3.3 Active learning for image classification with R
    
 
 ## Contributing
