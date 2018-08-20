@@ -6,3 +6,13 @@ sudo systemctl enable rstudio-server
 
 # Start the RStudio Server service
 sudo systemctl start rstudio-server
+
+# take ownership of /data
+sudo chown -R remoteuser:remoteuser /data
+
+# create conda environment
+wget https://raw.githubusercontent.com/Azure/active-learning-workshop/master/text_featurization/lm_finetune/conda.yml
+conda env create -f conda.yml
+source activate py35
+pip install ipykernel
+sudo /anaconda/envs/tensorflow/bin/python -m ipykernel install --name tensorflow --display-name "tensorflow"

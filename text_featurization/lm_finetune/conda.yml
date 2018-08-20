@@ -1,0 +1,31 @@
+name: tensorflow
+channels:
+  - defaults
+dependencies:
+  - pip=10.0.1=py36_0
+- python=3.6.6=hc3d631a_0
+- pip:
+  - gensim
+- ipykernel
+- ipython
+- ipython-genutils==0.2.0
+- jupyter-client==5.2.3
+- jupyter-core==4.4.0
+- keras==2.2.2
+- keras-applications
+- keras-preprocessing
+- markdown
+- matplotlib>=2.2.3
+- numpy<=1.14.5,>=1.13.3
+- pandas>=0.23.4
+- pyunpack
+- seaborn>=0.9.0
+- setuptools<=39.1.0
+- sklearn
+- spacy>=2.0.12
+- tensorboard==1.10.0
+- tensorflow>=1.10.0
+- tensorflow-hub==0.1.1
+- tqdm
+- urllib3
+prefix: /anaconda/envs/tensorflow
