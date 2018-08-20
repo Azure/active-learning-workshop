@@ -14,11 +14,12 @@ dependencies:
     - keras
     - matplotlib
     - mittens
-    - numpy
+    - numpy<=1.14.5,>=1.13.3
     - pandas
     - pyunpack
     - scikit-learn
     - seaborn
+    - setuptools<=39.1.0
     - spacy
     - tensorboard
     - tensorflow>=1.8.0
