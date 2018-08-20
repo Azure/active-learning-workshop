@@ -1,4 +1,6 @@
-"""Encoder module for featurizing and fine-tuning language models on new data.
+"""encoder.py
+Ali Zaidi, 2018
+Encoder module for featurizing and fine-tuning language models on new data.
 Utilizes pre-trained modules available on tensorflow_hub and Keras for defining model graph and computing forward-pass or fine-tuning.
 
 Notes:

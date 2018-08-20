@@ -1,4 +1,6 @@
-"""Data loaders
+"""load_data.py
+Ali Zaidi, 2018
+data loaders for notebook examples.
 Data belongs to original source. Just here for convenience.
 """
 
