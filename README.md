@@ -59,10 +59,10 @@ Both examples will use similar active learning approaches, but different aspects
 2. Use Case #1: Active Learning for text classification  
    2.1 Text featurization using Deep Learning  
    2.2 Active Learning by Uncertainty Sampling  
-   2.3 Active Learning for text classification  with R and Python  
-   2.4 How Uncertainty Sampling fails  
-   2.5 Hyperparameter tuning using mmlspark  
-   2.6 Serving model using mmlspark  
+   2.3 Active Learning for text classification  with R and Python      
+   2.4 Hyperparameter tuning using mmlspark  
+   2.5 Serving model using mmlspark  
+   2.6 How Uncertainty Sampling fails 
 3. Use Case #2: Building a custom image classifier for wood knots  
    3.1 Active Learning for object detection   
    3.2 Featurizing images at scale for building custom image classifier   
