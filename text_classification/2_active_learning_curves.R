@@ -37,8 +37,8 @@ FORM <- paste0(outcome, ' ~ ', paste(inputs, collapse="+"), " - 1")
 
 # params <- list(seed=1, initial_examples_per_class=20, examples_to_label_per_iteration=20, num_iterations=20, presample_size=20000, monte_carlo_samples=10, mu=0.5, sigma=0.1)
 
-NUM_ITERATIONS <- 800L
-NUM_REPS <- 5 #10
+NUM_ITERATIONS <- 50L
+NUM_REPS <- 5
   
 ### repeated fittings to full dataset
 if (file.exists(FULL_DATASET_RESULTS_FILE)){
@@ -86,18 +86,18 @@ if (file.exists(PASSIVE_LEARNING_RESULTS_FILE)){
 common_columns <- c('tss','auc', 'accuracy','seed', 'mode')
 
 learning_curve_data <- rbind(active_learning_res[common_columns], passive_learning_res[common_columns])
-auc_vec_full <- sapply(full_fit_list, function(f) f$performance[['auc']])
 
-learning_curve_data %>% ggplot(aes(x=tss, y=auc, group=interaction(factor(seed), factor(mode)), col=mode)) + 
+auc_vec_full <- sapply(full_fit_list, function(f) f$performance[['auc']])
+g_auc <- learning_curve_data %>% ggplot(aes(x=tss, y=auc, group=interaction(factor(seed), factor(mode)), col=mode)) + 
   geom_line(size=1.2, alpha=0.5) + 
   ggtitle(sprintf("AUC, active vs random (%d iterations)", NUM_ITERATIONS)) + 
   geom_hline(yintercept=auc_vec_full, size=0.25, alpha=0.5)
+ggsave(sprintf("AUC_%03d_iterations.png", NUM_ITERATIONS), g_auc, device="png")
 
 accuracy_vec_full <- sapply(full_fit_list, function(f) f$performance[['accuracy']])
-
-learning_curve_data %>% ggplot(aes(x=tss, y=accuracy, group=interaction(factor(seed), factor(mode)), col=mode)) + 
+g_acc <- learning_curve_data %>% ggplot(aes(x=tss, y=accuracy, group=interaction(factor(seed), factor(mode)), col=mode)) + 
   geom_line(size=1.2, alpha=0.5) + 
   ggtitle(sprintf("Accuracy, active vs random selection (%d iterations)", NUM_ITERATIONS)) + 
   geom_hline(yintercept=accuracy_vec_full)
-
+ggsave(sprintf("Accuracy_%03d_iterations.png", NUM_ITERATIONS), g_acc, device="png")
 
