@@ -1,0 +1,13 @@
+{
+  "embeddings": [
+    {
+      "tensorName": "Movie Plots Embeddings",
+      "tensorShape": [
+        1843,
+        50
+      ],
+      "tensorPath": "https://raw.githubusercontent.com/Azure/active-learning-workshop/master/text_featurization/word_embeddings/movies_tb/skipthoughts_embeddings.tsv",
+      "metadataPath": "https://raw.githubusercontent.com/Azure/active-learning-workshop/master/text_featurization/word_embeddings/movies_tb/skipthoughts_metadata.tsv"
+    }
+  ]
+}
