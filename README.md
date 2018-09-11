@@ -1,19 +1,34 @@
-# Active Learning Workshop - Scalable Featurization, Labelling and Experimentation Using R and Python
+# KDD 2018 Hands-on Tutorial: Active learning and transfer learning at scale with R and Python
 
 ## Instructions
 
-1. Provision a Windows Server 2016 Data Science Virtual Machine; the size "Standard_DS12_v2" works well:
-https://azuremarketplace.microsoft.com/en-us/marketplace/apps/microsoft-ads.windows-data-science-vm?tab=Overview
-- To connect to the Data Science Virtual Machine, use Microsoft Remote Desktop from the Microsoft Store
-- If you cannot connect, update all sets of inbound port rules to include a rule to open port 3389
+Provision an Ubuntu Linux Data Science Virtual Machine; the size "Standard_DS12_v2" works well  
+(**Note: at the start of the tutorial, credentials for pre-provisioned VMs will be handed out)**:  
+https://azuremarketplace.microsoft.com/en-us/marketplace/apps/microsoft-ads.linux-data-science-vm-ubuntu
 
-2. Launch “git bash” on the Data Science Virtual Machine
+Log in to JupyterHub by pointing your web browser to https://hostname:8000 (be sure to use https, not http, and replace "hostname" with the hostname or IP address of your virtual machine). Please disgregard warnings about certificate errors.
 
-3. In git bash, run this command:  cd ~/notebooks; git clone https://github.com/Azure/active-learning-workshop.git
+Open a bash terminal window in JupyterHub by clicking the New button and then clicking Terminal.
 
-4. Launch RStudio and open C:\Users\\\<username>\notebooks\active-learning-workshop\text_classification\1_wiki_detox_active_learning_workshop.Rmd and click “Knit”.
+In the terminal, run these four commands:
+
+```bash
+cd ~/notebooks
+
+git clone https://github.com/Azure/active-learning-workshop.git
+
+cd active-learning-workshop
+
+source startup.sh
+```
+
+You can now log in to RStudio Server at http://hostname:8787 (unlike JupyterHub, be sure to use http, not https).
 
 To provision many Data Science Virtual Machines using automation, see the scripts and the README file in https://github.com/Azure/active-learning-workshop/blob/master/automation_scripts
+
+Download assets for image labeling actvity:
+1) Download release package (zip) of  Visual Object Tagging Tool ([VOTT](https://github.com/Microsoft/VoTT/releases))
+2) Dowload images pre-labeled by Active Learning pipeline from [here](https://altutorialweu.blob.core.windows.net/activelearningexersize/ActivityVerifyLabels.zip).  
 
 ## Abstract
 
@@ -21,18 +36,38 @@ Accessed via R and Python APIs, pre-trained Deep Learning models and Transfer Le
 
 ## Active Learning
 
-[Active learning](https://en.wikipedia.org/wiki/Active_learning) helps us address the common situation where we have large amounts of data, but labeling this data is expensive. By using a preliminary model to select the cases that are likely to be most useful for improving the model, and iterating through several cycles of model training and case selection, we can often build a model using a much smaller training set (thus requiring less labeling effort) than we would otherwise need. Companies like [Figure Eight (formerly CrowdFlower)](https://www.figure-eight.com/) and services like the [Azure Custom Vision service](https://azure.microsoft.com/en-us/services/cognitive-services/custom-vision-service/) make use of active learning.
+[Active learning](https://en.wikipedia.org/wiki/Active_learning) helps us address the common situation where we have large amounts of data, but labeling this data is expensive. By using a preliminary model to select the cases that are likely to be most useful for improving the model, and iterating through several cycles of model training and case selection, we can often build a model using a much smaller training set (thus requiring less labeling effort) than we would otherwise need. Companies like [Figure Eight (formerly CrowdFlower)](https://www.figure-eight.com/) and services like the [Azure Custom Vision service](https://azure.microsoft.com/en-us/services/cognitive-services/custom-vision-service/) and [LUIS](https://www.luis.ai/home) make use of active learning.
 
 ## Outline:
 
-1.	Data exploration
-2.	Featurization using word embeddings
-3.	Active learning from selected cases
-4.  Other featurization approaches
-5.  Classification
-6.  ROC Curves and Utility Maximization
-7.  Hyperparameter Tuning using Azure Machine Learning and Azure Batch AI - https://marinch.visualstudio.com/_git/mlads2018spring (Microsoft FTEs only)
-7.  Deployment and consumption of scoring services with Azure Machine Learning
+We have two hands-on, end-to-end active learning-based classification examples:
+
+1. Text Classification: flagging personal attacks for moderating public discussions.
+2. Image Classification: identifying different types of wood knots in lumber.
+
+Both examples will use similar active learning approaches, but different aspects will be emphasized in the two parts:  
+
+* data exploration
+* featurization
+* classification
+* iterative model building and active learning from selected cases
+* deployment and consumption of scoring services
+* scaling with distributed computing
+
+## Detailed Outline of the Tutorial:
+1. Welcome and Virtual Machine Setup  
+2. Use Case #1: Active Learning for text classification  
+   2.1 Text featurization using Deep Learning  
+   2.2 Active Learning by Uncertainty Sampling  
+   2.3 Active Learning for text classification  with R and Python      
+   2.4 Hyperparameter tuning using mmlspark  
+   2.5 Serving model using mmlspark  
+   2.6 How Uncertainty Sampling fails 
+3. Use Case #2: Building a custom image classifier for wood knots  
+   3.1 Active Learning for object detection   
+   3.2 Featurizing images at scale for building custom image classifier   
+   3.3 Active learning for image classification with R
+   
 
 ## Contributing
 

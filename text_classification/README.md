@@ -15,4 +15,3 @@ Featurized dataset in zipped CSV format (in case you want to look at it in Excel
 Glove vectors for the subset of glove.6B words that are used in this dataset:
 [wiki_wordvecs_50d.csv](https://activelearnwestus.blob.core.windows.net/activelearningdemo/wiki_wordvecs_50d.csv)
 Each row is a word, and there are 50 columns representing the features. These rows are filtered from the full word embedding file (glove.6B.50d.txt, available from http://nlp.stanford.edu/data/glove.6B.zip), to only include those words that actually appear in our corpus. These are the "6B" embeddings, trained on 6 billion tokens from Wikipedia + Gigaword 5.
-
