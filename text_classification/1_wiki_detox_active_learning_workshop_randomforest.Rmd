@@ -28,6 +28,7 @@ library(dplyr)
 library(ggplot2)
 library(tidyr)
 library(pROC)
+library(randomForest)
 
 source("active_learning_lib_random_forest.R")
 
