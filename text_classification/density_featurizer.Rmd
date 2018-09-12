@@ -2,6 +2,9 @@
 title: "density_featurizer"
 author: "JMA"
 date: "August 19, 2018"
+params:
+  seed: 1                             # seed for random number generator
+  SUBSET_SIZE: 100                    # Points to sample for the density estimate
 output: html_document
 ---
 
@@ -18,11 +21,24 @@ density at that point.  We conjecture that points in dense (or in sparse) region
 informative samples. 
 
 
+```{r print_parameters}
+params
+```
+
+
 ```{r load}
-load("featurized_data.RData") # Load FEATURIZED DATA and final_res
-FEATURE_DIM <- 50
-SUBSET_SIZE <- 1000
-SUBSET_DATA <- FEATURIZED_DATA[sample(1:nrow(FEATURIZED_DATA), SUBSET_SIZE),]
+FEATURIZED_DATA_FILE <- "featurized_wiki_comments_attack.Rds" 
+
+if (!file.exists(FEATURIZED_DATA_FILE)){
+  storage_address <- 'https://activelearnwestus.blob.core.windows.net/activelearningdemo/'
+  download_url <- paste0(storage_address, FEATURIZED_DATA_FILE)
+  download.file(download_url, FEATURIZED_DATA_FILE)
+}
+FEATURIZED_DATA <- readRDS(FEATURIZED_DATA_FILE)
+
+FEATURE_DIM <- length(grep("^V", names(FEATURIZED_DATA), value=TRUE))
+
+SUBSET_DATA <- FEATURIZED_DATA[sample(1:nrow(FEATURIZED_DATA), params$SUBSET_SIZE),]
 ```
 
 ## Compute the pairwise distance matrix between all points, 
@@ -33,10 +49,10 @@ Normalizing for the size of a cube of FEATURE_DIM dimensions
 euclid_distance <-function(u, v) {
   sqrt(sum((u[1:FEATURE_DIM] -v[1:FEATURE_DIM])^2))/sqrt(FEATURE_DIM)
 } 
-pairwise_distances <- matrix(0, nrow=SUBSET_SIZE, ncol=SUBSET_SIZE)
+pairwise_distances <- matrix(0, nrow=params$SUBSET_SIZE, ncol=params$SUBSET_SIZE)
 
-for (i in 1:(SUBSET_SIZE-1) ){  # row
-  for (j in (i+1):(SUBSET_SIZE)){  # col
+for (i in 1:(params$SUBSET_SIZE-1) ){  # row
+  for (j in (i+1):(params$SUBSET_SIZE)){  # col
   pairwise_distances[i,j] <- euclid_distance(SUBSET_DATA[i,], SUBSET_DATA[j,])
   }
 }
@@ -73,34 +89,43 @@ neighborhood <- function(pd){
   ret * SUP_NORM
 }
 
+# Epanechnikov kernel (Wasserman, p. 312)
+K <- function(x) {
+  w <- 0
+  if ( abs(x) < sqrt(5)) {
+    w <- 0.75 * (1 - 0.2*x*x)/sqrt(5)
+    }
+    w
+}
+
 weight <- function(the_point, pd=pdist_v) {
   # Scan row of distance matrix, not including the point itself
   the_density <- 0
   if ( the_point == 1) {
-    for (j in 2:SUBSET_SIZE ) {
+    for (j in 2:params$SUBSET_SIZE ) {
       the_density <- the_density + neighborhood( pairwise_distances[1, j] )
     }
-  } else if ( the_point == SUBSET_SIZE) {
-    for (i in 1:(SUBSET_SIZE-1) ) {
-      the_density <- the_density + neighborhood( pairwise_distances[i,SUBSET_SIZE] )
+  } else if ( the_point == params$SUBSET_SIZE) {
+    for (i in 1:(params$SUBSET_SIZE-1) ) {
+      the_density <- the_density + neighborhood( pairwise_distances[i,params$SUBSET_SIZE] )
     }
   } else {
     for (i in 1:(the_point-1)){
       # cat('i',i, '\n')
       the_density <- the_density + neighborhood( pairwise_distances[i,the_point] )
     }
-    for (j in (the_point+1):(SUBSET_SIZE)){
+    for (j in (the_point+1):(params$SUBSET_SIZE)){
       # cat('j', j, '\n')
       the_density <- the_density + neighborhood( pairwise_distances[the_point,j] )
     }
   }
-  the_density/(SUBSET_SIZE -1)
+  the_density/(params$SUBSET_SIZE -1)
 }
 ```
 
 ## Compute the density at each point. 
 ```{r}
-densities <- sapply(1:SUBSET_SIZE, weight)
+densities <- sapply(1:params$SUBSET_SIZE, weight)
 densities_df = data.frame(densities)
 ggplot(data=densities_df, aes(densities_df)) + geom_histogram(breaks=seq(0, 1.5*max(densities), by = 0.01), fill='darkorange') +
 ggtitle( "Distribution of sample densities (marginal on X)")
