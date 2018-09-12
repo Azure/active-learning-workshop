@@ -37,7 +37,7 @@ RANDOM_TS_PERFORMANCE_FILE <- "passive_learning_curves_data.Rds"
 TEST_SET_SIZE <- 10000
 
 if (!file.exists(FEATURIZED_DATA_FILE)){
-  storage_address <- 'https://altutorialweu.blob.core.windows.net/activelearningdemo/'
+  storage_address <- 'https://activelearnwestus.blob.core.windows.net/activelearningdemo/featurized_data/'
   download_url <- paste0(storage_address, FEATURIZED_DATA_FILE)
   download.file(download_url, FEATURIZED_DATA_FILE)
 }
