@@ -87,17 +87,25 @@ table(TEST_SET$flagged)/nrow(TEST_SET)
 
 ```{r select_cases}
 get_uncertainty_function <- function(pred_df){
+  # Use a function with a max around mu, to score predicted prob. 
   function(x){
     dnorm(x, mean=params$mu, sd=params$sigma)
   }
 }
 
-select_cases <- function(current_results, available_cases, N=params$examples_to_label_per_iteration, presample_size=params$presample_size){
-    model <- current_results$model
+gen_candidate_cases <- function(available_cases, presample_size=params$presample_size) {
+    # Select a presample of cases to evaluate. 
     presample_size <- min(nrow(available_cases), presample_size)
     candidate_cases <- available_cases[sample(1:nrow(available_cases), presample_size),]
-    
-    # votes_vec <- predict(model, candidate_cases, type='vote')[,'TRUE']'
+    candidate_cases
+}
+
+# Current result  - the model to use to eval candidates.
+# Available_cases - unlabelled data to chose from 
+select_uncertainty_cases <- function(current_results, available_cases, N=params$examples_to_label_per_iteration){
+
+    candidate_cases <- gen_candidate_cases(available_cases)
+    model <- current_results$model
     X_candidates <- model.matrix(formula(FORM), candidate_cases)
     votes_vec <- model$predict_proba(X_candidates)[,2]
     predictions_df <- data.frame(rev_id=candidate_cases$rev_id,
@@ -109,12 +117,34 @@ select_cases <- function(current_results, available_cases, N=params$examples_to_
 
     p <- predictions_df$estimated_probability
     u <- uncertainty(p)
+    # sample from the available predictions, weighted by probability u.
     s <- sample(predictions_df$rev_id, N, prob=u, replace=FALSE)
     selected <- predictions_df %>% filter(rev_id %in% s)
 
     return(selected)
 }
 
+select_outlier_cases <- function(current_results, available_cases, presample_size=params$presample_size, N=params$examples_to_label_per_iteration){
+      candidate_cases <- gen_candidate_cases(available_cases, presample_size)
+      pairwise_distances <- distance_mat(candidate_cases, presample_size) #passed globally :()
+      candidate_cases <- feature_density_est(candidate_cases, presample_size)
+      candidate_cases[order(candidate_cases$density)[1:N],]
+}
+
+select_cases <- function(current_results, available_cases, N=params$examples_to_label_per_iteration) {
+  if (FALSE) {
+    select_uncertainty_cases(current_results, available_cases, N=params$examples_to_label_per_iteration)
+  } else {
+    select_outlier_cases(current_results, available_cases, 60, 10)
+  }
+}
+```
+
+Different methods to chose samples
+
+```{r eval=FALSE}
+source("density_estimates.R")
+select_outlier_cases(NULL, unlabeled_data_df, 60, 10)$density
 ```
 
 ## Initial model
@@ -126,7 +156,7 @@ First we build a model on the small number of examples in the initial training s
 ```{r train__initial_model}
 
 initial_model_results <- fit_and_evaluate_model(initial_training_set)
-initial_model_results$selected <- select_cases(initial_model_results, unlabeled_data_df)
+initial_model_results$selected <-  select_cases(initial_model_results, unlabeled_data_df)
 
 ```
 
