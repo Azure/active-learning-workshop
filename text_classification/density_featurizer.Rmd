@@ -1,0 +1,203 @@
+---
+title: "density_featurizer"
+author: "JMA"
+date: "August 19, 2018"
+params:
+  seed: 9                             # seed for random number generator
+  SUBSET_SIZE: 60                     # Points to sample for the density estimate
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document to show how to build a non-parameteric density estimate for a high dimensional 
+dataset. The example is taken from the wiki-tox word embedding data used in KDD 2018. We compute the symmetric
+pairwise distance matrix for a sample of points, then use a non-parametric density estimator to compute the
+density at that point.  We conjecture that points in dense (or in sparse) regions of the space are more
+informative samples. 
+
+
+```{r print_parameters}
+params
+```
+
+
+```{r eval=TRUE}
+# Assume that the FEATURIZED_DATA is already loaded. 
+FEATURIZED_DATA_FILE <- "featurized_wiki_comments_attack.Rds" 
+
+if (!file.exists(FEATURIZED_DATA_FILE)){
+  storage_address <- 'https://activelearnwestus.blob.core.windows.net/activelearningdemo/'
+  download_url <- paste0(storage_address, FEATURIZED_DATA_FILE)
+  download.file(download_url, FEATURIZED_DATA_FILE)
+}
+FEATURIZED_DATA <- readRDS(FEATURIZED_DATA_FILE)
+```
+
+Create a subset from which to compute the density estimate. 
+```{r}
+FEATURE_DIM <- length(grep("^V", names(FEATURIZED_DATA), value=TRUE))
+FEATURIZED_DATA <- FEATURIZED_DATA[complete.cases(FEATURIZED_DATA),]
+SUBSET_DATA <- FEATURIZED_DATA[sample(1:nrow(FEATURIZED_DATA), params$SUBSET_SIZE),]
+
+```
+
+## Compute the pairwise distance matrix between all points, 
+
+Normalizing for the size of a cube of FEATURE_DIM dimensions
+
+```{r}
+distance_mat <- function(subset_data=SUBSET_DATA, presample_size=params$SUBSET_SIZE) {
+  
+  euclid_distance <-function(u, v) {
+  sqrt(sum((u[1:FEATURE_DIM] -v[1:FEATURE_DIM])^2))/sqrt(FEATURE_DIM)
+  } 
+  
+  pairwise_distances <- matrix(0, nrow=presample_size, ncol=presample_size)
+
+  for (i in 1:(presample_size-1) ){  # row
+    for (j in (i+1):(presample_size)){  # col
+    pairwise_distances[i,j] <- euclid_distance(subset_data[i,], subset_data[j,])
+    }
+  }
+  pairwise_distances
+}
+```
+Have a look at the pairwise distance distribution
+```{r}
+pairwise_distances <- distance_mat(SUBSET_DATA, params$SUBSET_SIZE)
+```
+
+```{r}
+library(ggplot2)
+pdist_v <- as.vector(pairwise_distances)
+pdist_v <- pdist_v[pdist_v > 0]
+pdist_df = data.frame(pdist_v)
+ggplot(data=pdist_df, aes(pdist_df$pdist_v)) + geom_histogram(breaks=seq(0, 0.7, by = 0.05), fill='lightblue') +
+ggtitle( sprintf('Pairwise Distances:  mean %4.2f sd %4.2f', mean(pdist_v), sd(pdist_v)))
+
+```
+
+
+## Sum the contribution for a point from all other points. 
+
+Different local weightings kernels
+```{r}
+
+compact_support <- function(pd=pairwise_distances) {
+  pdist_v <- as.vector(pd)
+  pdist_v <- pdist_v[pdist_v > 0]
+  support <- mean(pdist_v, na.rm=TRUE) + 4* sd(pdist_v, na.rm=TRUE)
+  support
+}
+
+# Triangular distribution.
+tri_neighborhood <- function(pd){
+  SUPPORT <- compact_support()
+  # cat('pd ', pd)
+  if ( pd >= SUPPORT) {
+    ret <- 0
+  } else {
+    ret <- (SUPPORT - pd)/SUPPORT
+  }
+  # cat('ne', ret, '\n')
+  ret * 0.5 * SUPPORT
+}
+
+# Epanechnikov kernel (Wasserman, p. 312)
+K <- function(x) {
+  w <- 0
+  if ( abs(x) < sqrt(5)) {
+    w <- 0.75 * (1 - 0.2*x*x)/sqrt(5)
+    }
+    w
+}
+```
+
+
+Start with a weighted neihborhood of finite support to speed it up
+
+```{r}
+weight <- function(the_point, pairwise_distances, subset_size=params$SUBSET_SIZE, knl=tri_neighborhood) {
+  # Scan row of distance matrix, not including the point itself
+  the_density <- 0
+  if ( the_point == 1) {
+    # Special case the first and last row of the distance matrix. 
+    for (j in 2:subset_size ) {
+      the_density <- the_density + knl(pairwise_distances[1, j] )
+    }
+  } else if ( the_point == subset_size) {
+    for (i in 1:(subset_size-1) ) {
+      the_density <- the_density + knl(pairwise_distances[i,subset_size] )
+    }
+  } else {
+    for (i in 1:(the_point-1)){
+      # cat('i',i, '\n')
+      the_density <- the_density + knl( pairwise_distances[i,the_point] )
+    }
+    for (j in (the_point+1):(subset_size)){
+      # cat('j', j, '\n')
+      the_density <- the_density + knl( pairwise_distances[the_point,j] )
+    }
+  }
+  # SUBSET_DATA$density[the_point] <- the_density/(params$SUBSET_SIZE -1)
+  # cat('SUBSET_DATA', the_point, SUBSET_DATA$density[the_point], '\n')
+  the_density/(subset_size -1)
+}
+
+
+```
+
+## Compute the density at each point. 
+```{r}
+feature_density_est <- function(subset_data=SUBSET_DATA, subset_size=params$SUBSET_SIZE) {
+  SUBSET_DATA$density<- 0
+  for (k in 1:subset_size) {
+    # w <- weight(k)
+    SUBSET_DATA$density[k] <- weight(k, pairwise_distances, subset_size=subset_size)
+  }
+  SUBSET_DATA
+}
+```
+
+# Compute the non-parametric density at the subset sample points
+```{r}
+SUBSET_DATA <- feature_density_est(SUBSET_DATA)
+```
+
+Plot the density histogram.
+
+```{r}
+ggplot(data=SUBSET_DATA, aes(SUBSET_DATA$density)) + geom_histogram(breaks=seq(0, 1.1*max(SUBSET_DATA$density), by = 0.01), fill='darkorange') +
+ggtitle( "Distribution of sample densities (marginal on X)")
+
+```
+
+# Find sparse points in the unlabelled set (with low density).
+
+View the result as a scatterplot over a pair of features at a time
+
+```{r}
+plts <- list()
+for (y in 2:30) {
+  coln <- paste0('V', y)
+plts[[length(plts) +1]] <- ggplot(SUBSET_DATA, aes_string('V31', I(coln))) + geom_point(aes(size=density, alpha=density, color=flagged)) 
+  cat(coln, ' ')
+}
+```
+```{r}
+print(plts[[20]])
+```
+
+Our approach - filter the subset by density - an use that subset to select from. 
+
+```{r}
+# Select the lower prob. tail of the set
+
+subd <-  SUBSET_DATA[order(SUBSET_DATA$density),]
+qplot(x=1:(params$SUBSET_SIZE), y=subd$density)
+```
