@@ -1,6 +1,8 @@
 # density_estimates.R
 # JMA 12 sept 2018
 
+FEATURE_DIM <- length(inputs)
+
 distance_mat <- function(subset_data=SUBSET_DATA, presample_size=params$SUBSET_SIZE) {
   
   euclid_distance <-function(u, v) {
@@ -27,8 +29,7 @@ compact_support <- function(pd=pairwise_distances) {
 }
 
 # Triangular distribution.
-tri_neighborhood <- function(pd){
-  SUPPORT <- compact_support()
+tri_neighborhood <- function(pd, SUPPORT){
   # cat('pd ', pd)
   if ( pd >= SUPPORT) {
     ret <- 0
@@ -40,7 +41,7 @@ tri_neighborhood <- function(pd){
 }
 
 # Epanechnikov kernel (Wasserman, p. 312)
-K <- function(x) {
+K <- function(x, z) {
   w <- 0
   if ( abs(x) < sqrt(5)) {
     w <- 0.75 * (1 - 0.2*x*x)/sqrt(5)
@@ -50,24 +51,25 @@ K <- function(x) {
 
 weight <- function(the_point, pairwise_distances, subset_size=params$SUBSET_SIZE, knl=tri_neighborhood) {
   # Scan row of distance matrix, not including the point itself
+  nhood_sup <- compact_support(pairwise_distances)
   the_density <- 0
   if ( the_point == 1) {
     # Special case the first and last row of the distance matrix. 
     for (j in 2:subset_size ) {
-      the_density <- the_density + knl(pairwise_distances[1, j] )
+      the_density <- the_density + knl(pairwise_distances[1, j], nhood_sup )
     }
   } else if ( the_point == subset_size) {
     for (i in 1:(subset_size-1) ) {
-      the_density <- the_density + knl(pairwise_distances[i,subset_size] )
+      the_density <- the_density + knl(pairwise_distances[i,subset_size], nhood_sup )
     }
   } else {
     for (i in 1:(the_point-1)){
       # cat('i',i, '\n')
-      the_density <- the_density + knl( pairwise_distances[i,the_point] )
+      the_density <- the_density + knl( pairwise_distances[i,the_point], nhood_sup )
     }
     for (j in (the_point+1):(subset_size)){
       # cat('j', j, '\n')
-      the_density <- the_density + knl( pairwise_distances[the_point,j] )
+      the_density <- the_density + knl( pairwise_distances[the_point,j], nhood_sup )
     }
   }
   # SUBSET_DATA$density[the_point] <- the_density/(params$SUBSET_SIZE -1)
@@ -75,11 +77,11 @@ weight <- function(the_point, pairwise_distances, subset_size=params$SUBSET_SIZE
   the_density/(subset_size -1)
 }
 
-feature_density_est <- function(subset_data=SUBSET_DATA, subset_size=params$SUBSET_SIZE) {
-  SUBSET_DATA$density<- 0
+feature_density_est <- function(pairwise_distances, subset_data=SUBSET_DATA, subset_size=params$SUBSET_SIZE) {
+  subset_data$density<- 0
   for (k in 1:subset_size) {
     # w <- weight(k)
-    SUBSET_DATA$density[k] <- weight(k, pairwise_distances, subset_size=subset_size)
+    subset_data$density[k] <- weight(k, pairwise_distances, subset_size=subset_size)
   }
-  SUBSET_DATA
+  subset_data
 }

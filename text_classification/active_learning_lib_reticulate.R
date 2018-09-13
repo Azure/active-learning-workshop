@@ -8,6 +8,9 @@ fit_and_evaluate_model <- function(candidate_cases, form=FORM, test_set=TEST_SET
   library(reticulate)
   library(pROC)
   
+  use_python("C:/ProgramData/Miniconda3'python.exe")
+  use_condaenv("base")
+  
   candidate_cases$flagged <- factor(candidate_cases$flagged)
   
   compute_roc <- function(pred_df){
