@@ -146,7 +146,7 @@ saveRDS(learning_runs, learning_results_file)
 
 ```
 
-## Format and plot results
+## Format results
 
 ```{r format_results}
 run_results_as_df <- function(run_results, run_number){
@@ -182,7 +182,7 @@ evaluate_run <- function(run_results, X_test, y_test){
 results_df$test_set_auc <- lapply(learning_runs, evaluate_run, X_test, y_test) %>% unlist
 
 ```
-
+## Plot results
 ```{r plot_results}
 results_df %>% ggplot(aes(x=tss, y=test_set_auc, col=selection_mode, group=run_number)) + geom_line()
 ```
