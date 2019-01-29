@@ -9,7 +9,7 @@ params:
   sigma: 0.1                           # standard deviation for uncertainty sampling weighting
   candidate_group: 'A'                 # group ('A', 'B', or 'C;) used for candidate pool
   test_group: 'B'                      # group (different from candidate group) used for test set
-  seed: 1                              # seed for random number generator
+  seed: 101                              # seed for random number generator
 ---
 
 ```{r setup, include=FALSE}
@@ -30,7 +30,6 @@ library(ggplot2)
 library(pROC)
 library(glmnet)
 library(feather)
-library(RColorBrewer)
 
 ALL_DATA <- read_feather("wiki_attacks_use_encoded_30k.feather")
 
@@ -63,7 +62,7 @@ INITIAL_TRAINING_CASES <- with(CANDIDATE_SET, {
 # Be sure that there are some examples from each class
 CANDIDATE_SET[CANDIDATE_SET$rev_id %in% INITIAL_TRAINING_CASES, 'flagged'] %>% table
 
-NULL_MODEL <- "This is not really a model, just a placeholder for method dispatch."
+NULL_MODEL <- "This is just a placeholder for method dispatch."
 class(NULL_MODEL) <- "null_model"
 predict.null_model <- function(object, newx, type) matrix(runif(nrow(newx)), ncol=1)
 
@@ -100,8 +99,6 @@ fit_and_select <- function(iteration_num, cases_per_iteration, selection_mode="a
   
   list(model=model, 
        iteration=iteration_num, 
-       lambda = model$lambda,
-       kfold_auc = model$cvm,
        tss = model$nobs,
        selection_mode=selection_mode, 
        new_cases=paste(new_cases, collapse=','))
@@ -150,7 +147,7 @@ saveRDS(learning_runs, learning_results_file)
 
 ```{r format_results}
 run_results_as_df <- function(run_results, run_number){
-  keep_columns <- c("tss", "lambda", "selection_mode")
+  keep_columns <- c("tss", "selection_mode")
   rrdf <- run_results %>% lapply(function(rr) rr[keep_columns]) %>% bind_rows
   rrdf$run_number <- run_number
   rrdf
