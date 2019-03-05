@@ -1,0 +1,231 @@
+---
+title: "Active Learning with Cross-Validation"
+author: "Bob Horton"
+date: "3/3/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache=TRUE)
+```
+
+```{r libraries, message=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(pROC)
+library(glmnet)
+library(feather)
+library(doParallel)
+```
+
+## Fitting models on a limited labeling budget
+
+In [active learning](https://en.wikipedia.org/wiki/Active_learning_(machine_learning)), machine learning models are iteratively used to select cases to be labeled. This can result in significantly better model performance from a training set of a given size than randomly selecting training cases.
+
+
+We want to use k-fold cross validation to tune the hyperparameters of the model, primarily lambda (the total regularization penalty.)
+
+
+
+```{r load_data}
+ALL_DATA <- read_feather("wiki_attacks_use_encoded_30k.feather")
+```
+
+
+```{r run_learning_curve}
+
+run_learning_curve <- function(params, all_data){
+  set.seed(params$seed)
+  
+  subset_name <- sample(rep(LETTERS[1:3], times=nrow(all_data)/3))
+  table(subset_name)
+  
+  CANDIDATE_SET <- all_data[subset_name==params$candidate_group,]
+  VALIDATION_SET <- all_data[subset_name==params$validation_group,]
+  TEST_SET <- all_data[subset_name==params$test_group,]
+  
+  INPUTS <- grep('^X\\d+', names(CANDIDATE_SET), value=TRUE)
+  OUTCOME <- "flagged"
+  
+  INITIAL_TRAINING_CASES <- with(CANDIDATE_SET, {
+    sample(rev_id, 100)
+  })
+  
+  TRAINING_CASES <- INITIAL_TRAINING_CASES
+  
+  set.seed(100*params$seed + params$replicate_num) # re-seed RNG for each replicate
+  
+  CANDIDATE_SET[CANDIDATE_SET$rev_id %in% INITIAL_TRAINING_CASES, 'flagged'] %>% table
+  
+  NULL_MODEL <- "placeholder for method dispatch."
+  class(NULL_MODEL) <- "null_model"
+  predict.null_model <- function(object, newx, type, s) matrix(runif(nrow(newx)), ncol=1)
+  
+  select_new_cases <- function(current_model, available_cases, n, sigma=0.1, mu=0.5, s=0.1){
+    X_available <- as.matrix(available_cases[INPUTS])
+    category_prob <- predict(current_model, newx=X_available, type="response", s=s)[,1]
+    selection_weight <- dnorm(category_prob, mean=mu, sd=sigma)
+    sample(available_cases$rev_id, size=n, prob=selection_weight)
+  }
+  
+  fit_and_select <- function(iteration_num, my_training_cases, cases_per_iteration, selection_mode){
+ 
+    training_set <- CANDIDATE_SET[CANDIDATE_SET$rev_id %in% my_training_cases,]
+    
+    alpha <- params$alpha
+    lambdas <- 10^(seq(2, -5, length.out=22))
+    X_train <- training_set[INPUTS] %>% as.matrix
+    y_train <- training_set[[OUTCOME]]
+    
+    if (params$selection_mode == 'active_external') {
+      model <- glmnet(X_train, y_train, alpha=alpha,
+                      lambda=lambdas,
+                      family="binomial")
+      
+      X_val <- VALIDATION_SET[INPUTS] %>% as.matrix
+      y_val <- VALIDATION_SET[[OUTCOME]]
+    
+      validation_score_matrix <- predict(model, X_val, type="response")
+      auc_vector <- apply(validation_score_matrix, 
+                          2, 
+                          function(score_vector){
+                            pROC::auc(factor(y_val), score_vector, direction='<') %>% 
+                            as.numeric
+                          })
+      best_lambda_idx <- which.max(auc_vector)
+      validation_auc <- auc_vector[best_lambda_idx]
+      lambda <- model$lambda[best_lambda_idx]
+    } else { # use k-fold cross-validation for 'random' or 'active_kfold'
+      cv_fit <- cv.glmnet(X_train, y_train, alpha=alpha, 
+                        lambda=lambdas, 
+                        family="binomial", 
+                        type.measure="auc",  
+                        nfolds=10,
+                        keep=TRUE)
+      
+      model <- cv_fit$glmnet.fit
+      
+      cmp <- if (cv_fit$cvm[1] < cv_fit$cvm[10]) which.max else which.min
+      best_lambda_idx <- cmp(cv_fit$cvm)
+      validation_auc <- cv_fit$cvm[best_lambda_idx]
+      lambda <- cv_fit$lambda[best_lambda_idx]
+    }
+
+    
+    X_test <- TEST_SET[INPUTS] %>% as.matrix
+    y_test <- TEST_SET[[OUTCOME]]
+    
+    test_pred <- predict(model, X_test, s=lambda, type="response")[,1]
+    test_set_auc <- pROC::auc(factor(y_test), test_pred, direction='<') %>% as.numeric
+    
+    selection_model <- if (selection_mode == "random") NULL_MODEL else model
+    available_cases <- CANDIDATE_SET[!(CANDIDATE_SET$rev_id %in% my_training_cases),]
+    new_cases <- select_new_cases(selection_model, available_cases, n=cases_per_iteration, sigma=params$sigma, mu=params$mu, s=lambda)
+    TRAINING_CASES <<- c(TRAINING_CASES, new_cases)
+    
+    list(model=model, # cv_fit=cv_fit,
+         params_id=params$params_id,
+         replicate_num=params$replicate_num,
+         candidate_group=params$candidate_group,
+          iteration=iteration_num, 
+          lambda = lambda,
+          validation_auc = validation_auc,
+          test_set_auc = test_set_auc,
+          tss = model$nobs,
+          selection_mode=selection_mode, 
+          new_cases=new_cases)
+  }
+  
+  do_training_run <- function(num_iterations, initial_training_cases, cases_per_iteration, selection_mode){
+    training_cases <- initial_training_cases
+    run_results <- vector(mode = "list", length = num_iterations)
+    for(iteration_num in 1:num_iterations){
+      t0 <- Sys.time()
+      results <- fit_and_select(iteration_num, training_cases, cases_per_iteration, selection_mode)
+      training_cases <- c(training_cases, results$new_cases)
+      results$time <- difftime(Sys.time(), t0, units='secs') %>% as.numeric
+      run_results[[iteration_num]] <- results
+    }
+    run_results
+  }
+
+  learning_results <- do_training_run(num_iterations=params$num_iterations, 
+                                      initial_training_cases=INITIAL_TRAINING_CASES,
+                                      cases_per_iteration=params$examples_per_iteration,
+                                      selection_mode=params$selection_mode)
+  
+  learning_results
+}
+
+
+```
+
+```{r parameter_sets}
+# Expand parameter set table
+param_ranges <- list(
+  seed = 1,
+  initial_examples = 100,
+  examples_per_iteration = 100,
+  num_iterations = 99,
+  replicate_num = 1:3,
+  mu = 0.5,
+  sigma = 0.1,
+  alpha = 0,
+  selection_mode = c('active_kfold', 'active_external', 'random'),
+  candidate_group = c('A') #, 'B', 'C')
+)
+
+next_group <- function(group_vec, groups=c('A', 'B', 'C')){
+  group_idx <- sapply(group_vec, function(grp) which(groups==grp))
+  groups[((group_idx) %% length(groups)) + 1]
+}
+
+parameter_sets <- expand.grid(param_ranges) %>% 
+  mutate(validation_group=next_group(candidate_group),
+         test_group=next_group(validation_group),
+         params_id=100000 + (1:n()))
+
+```
+
+## Run learning curves
+
+```{r run_learning_curves}
+
+num_cores <- detectCores(logical=TRUE)
+cl <- makeCluster(num_cores)
+registerDoParallel(cl)
+
+results_list <- foreach (idx = 1:nrow(parameter_sets), 
+                .packages=c('dplyr', 'glmnet', 'feather')) %dopar% {
+  run_learning_curve(parameter_sets[idx,], ALL_DATA)
+}
+
+stopCluster(cl)
+
+```
+
+```{r plot_results}
+
+results_to_dataframe <- function(run){
+  run %>% 
+    lapply(function(iter) iter[c('params_id', 'replicate_num', 'candidate_group', 'iteration', 'tss', 'validation_auc', 'test_set_auc', 'lambda', 'selection_mode', 'time')]) %>%
+    bind_rows
+}
+
+results_df <- results_list %>% lapply(results_to_dataframe) %>% bind_rows
+
+results_df %>% ggplot(aes(x=tss, y=test_set_auc, color=selection_mode, group=params_id)) + geom_line()
+
+results_df %>% ggplot(aes(x=tss, y=validation_auc, color=selection_mode, group=params_id)) + geom_line()
+
+results_df %>% ggplot(aes(x=tss, y=time, color=selection_mode, group=params_id)) + geom_line()
+
+results_df %>% ggplot(aes(x=tss, y=log10(lambda), color=selection_mode, group=params_id)) + geom_line()
+```
+
+## References
+
+* Settles, Burr. [Active Learning Literature Survey](http://burrsettles.com/pub/settles.activelearning.pdf)
+
+* [Cross-validation](https://en.wikipedia.org/wiki/Cross-validation_(statistics))
