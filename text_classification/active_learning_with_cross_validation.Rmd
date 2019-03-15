@@ -69,7 +69,11 @@ run_learning_curve <- function(params, all_data){
     sample(available_cases$rev_id, size=n, prob=selection_weight)
   }
   
-  fit_and_select <- function(iteration_num, my_training_cases, cases_per_iteration, selection_mode){
+  
+  #' Fit model to current training set and select new cases from candidate set. Also records validation performance.
+  #' @param selection_mode: 'active' or 'passive'
+  #' @param validation_mode 'internal' (k-fold cross-validation) or 'external' (on a held-out validation set.)
+  fit_and_select <- function(iteration_num, my_training_cases, cases_per_iteration, selection_mode, validation_mode){
  
     training_set <- CANDIDATE_SET[CANDIDATE_SET$rev_id %in% my_training_cases,]
     
@@ -78,7 +82,7 @@ run_learning_curve <- function(params, all_data){
     X_train <- training_set[INPUTS] %>% as.matrix
     y_train <- training_set[[OUTCOME]]
     
-    if (params$selection_mode == 'active_external') {
+    if (params$validation_mode == 'external') {
       model <- glmnet(X_train, y_train, alpha=alpha,
                       lambda=lambdas,
                       family="binomial")
@@ -96,7 +100,7 @@ run_learning_curve <- function(params, all_data){
       best_lambda_idx <- which.max(auc_vector)
       validation_auc <- auc_vector[best_lambda_idx]
       lambda <- model$lambda[best_lambda_idx]
-    } else { # use k-fold cross-validation for 'random' or 'active_kfold'
+    } else { # validation_mode == 'internal': use k-fold cross-validation
       cv_fit <- cv.glmnet(X_train, y_train, alpha=alpha, 
                         lambda=lambdas, 
                         family="binomial", 
@@ -112,14 +116,15 @@ run_learning_curve <- function(params, all_data){
       lambda <- cv_fit$lambda[best_lambda_idx]
     }
 
-    
+    # regardless of validation mode, evaluate performance on test set.
     X_test <- TEST_SET[INPUTS] %>% as.matrix
     y_test <- TEST_SET[[OUTCOME]]
     
     test_pred <- predict(model, X_test, s=lambda, type="response")[,1]
     test_set_auc <- pROC::auc(factor(y_test), test_pred, direction='<') %>% as.numeric
     
-    selection_model <- if (selection_mode == "random") NULL_MODEL else model
+    # Choose selection model based on selection mode.
+    selection_model <- if (params$selection_mode == 'passive') NULL_MODEL else model
     available_cases <- CANDIDATE_SET[!(CANDIDATE_SET$rev_id %in% my_training_cases),]
     new_cases <- select_new_cases(selection_model, available_cases, n=cases_per_iteration, sigma=params$sigma, mu=params$mu, s=lambda)
     TRAINING_CASES <<- c(TRAINING_CASES, new_cases)
@@ -128,21 +133,22 @@ run_learning_curve <- function(params, all_data){
          params_id=params$params_id,
          replicate_num=params$replicate_num,
          candidate_group=params$candidate_group,
-          iteration=iteration_num, 
-          lambda = lambda,
-          validation_auc = validation_auc,
-          test_set_auc = test_set_auc,
-          tss = model$nobs,
-          selection_mode=selection_mode, 
-          new_cases=new_cases)
+         iteration=iteration_num,
+         lambda = lambda,
+         validation_auc = validation_auc,
+         test_set_auc = test_set_auc,
+         tss = model$nobs,
+         selection_mode=params$selection_mode,
+         validation_mode=params$validation_mode,
+         new_cases=new_cases)
   }
   
-  do_training_run <- function(num_iterations, initial_training_cases, cases_per_iteration, selection_mode){
+  do_training_run <- function(num_iterations, initial_training_cases, cases_per_iteration, selection_mode, validation_mode){
     training_cases <- initial_training_cases
     run_results <- vector(mode = "list", length = num_iterations)
     for(iteration_num in 1:num_iterations){
       t0 <- Sys.time()
-      results <- fit_and_select(iteration_num, training_cases, cases_per_iteration, selection_mode)
+      results <- fit_and_select(iteration_num, training_cases, cases_per_iteration, selection_mode, validation_mode)
       training_cases <- c(training_cases, results$new_cases)
       results$time <- difftime(Sys.time(), t0, units='secs') %>% as.numeric
       run_results[[iteration_num]] <- results
@@ -153,7 +159,8 @@ run_learning_curve <- function(params, all_data){
   learning_results <- do_training_run(num_iterations=params$num_iterations, 
                                       initial_training_cases=INITIAL_TRAINING_CASES,
                                       cases_per_iteration=params$examples_per_iteration,
-                                      selection_mode=params$selection_mode)
+                                      selection_mode=params$selection_mode,
+                                      validation_mode=params$validation_mode)
   
   learning_results
 }
@@ -166,14 +173,15 @@ run_learning_curve <- function(params, all_data){
 param_ranges <- list(
   seed = 1,
   initial_examples = 100,
-  examples_per_iteration = 100,
-  num_iterations = 99,
+  examples_per_iteration = 25,
+  num_iterations = 396,
   replicate_num = 1:3,
   mu = 0.5,
   sigma = 0.1,
   alpha = 0,
-  selection_mode = c('active_kfold', 'active_external', 'random'),
-  candidate_group = c('A') #, 'B', 'C')
+  selection_mode = c('active', 'passive'),
+  validation_mode = c('internal', 'external'), # do internal first since they take longer
+  candidate_group = c('B', 'C')
 )
 
 next_group <- function(group_vec, groups=c('A', 'B', 'C')){
@@ -192,7 +200,7 @@ parameter_sets <- expand.grid(param_ranges) %>%
 
 ```{r run_learning_curves}
 
-num_cores <- detectCores(logical=TRUE)
+num_cores <- detectCores(logical=FALSE)
 cl <- makeCluster(num_cores)
 registerDoParallel(cl)
 
@@ -205,27 +213,37 @@ stopCluster(cl)
 
 ```
 
-```{r plot_results}
+```{r results_to_dataframe}
 
 results_to_dataframe <- function(run){
   run %>% 
-    lapply(function(iter) iter[c('params_id', 'replicate_num', 'candidate_group', 'iteration', 'tss', 'validation_auc', 'test_set_auc', 'lambda', 'selection_mode', 'time')]) %>%
+    lapply(function(iter) 
+      iter[c('params_id', 'replicate_num', 'candidate_group', 'iteration', 'tss', 
+             'validation_auc', 'test_set_auc', 'lambda', 'selection_mode', 'validation_mode', 'time')]) %>%
     bind_rows
 }
 
 results_df <- results_list %>% lapply(results_to_dataframe) %>% bind_rows
 
-results_df %>% ggplot(aes(x=tss, y=test_set_auc, color=selection_mode, group=params_id)) + geom_line()
+saveRDS(results_df, "active_passive_internal_external_results_groupBC.Rds")
+```
 
-results_df %>% ggplot(aes(x=tss, y=validation_auc, color=selection_mode, group=params_id)) + geom_line()
+```{r save_results_list}
+saveRDS(results_list, "active_passive_internal_external_results_list_groupBC.Rds")
+```
 
-results_df %>% ggplot(aes(x=tss, y=time, color=selection_mode, group=params_id)) + geom_line()
+```{r plot_results}
+results_df %>% ggplot(aes(x=tss, y=test_set_auc, color=selection_mode, group=params_id)) + geom_line() + facet_grid(. ~ validation_mode)
 
-results_df %>% ggplot(aes(x=tss, y=log10(lambda), color=selection_mode, group=params_id)) + geom_line()
+results_df %>% ggplot(aes(x=tss, y=validation_auc, color=selection_mode, group=params_id)) + geom_line() + facet_grid(. ~ validation_mode)
+
+results_df %>% ggplot(aes(x=tss, y=time, color=selection_mode, group=params_id)) + geom_line() + facet_grid(. ~ validation_mode)
+
+results_df %>% ggplot(aes(x=tss, y=log10(lambda), color=selection_mode, group=params_id)) + geom_line() + facet_grid(. ~ validation_mode)
 ```
 
 ## References
 
 * Settles, Burr. [Active Learning Literature Survey](http://burrsettles.com/pub/settles.activelearning.pdf)
 
-* [Cross-validation](https://en.wikipedia.org/wiki/Cross-validation_(statistics))
+* Wikipedia, [Cross-validation](https://en.wikipedia.org/wiki/Cross-validation_(statistics))
